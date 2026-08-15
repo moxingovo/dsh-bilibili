@@ -15,7 +15,7 @@ export { BILIBILI_SEARCH_DEFAULT_PAGE_SIZE, BILIBILI_SUBTITLES_MAX_CHARS, BVID_P
 export type { BilibiliSearchArgs, BilibiliSubtitleOutput } from './tools.ts';
 export { MIXIN_KEY_ENC_TAB, mixinKey, wbiSign } from './wbi.ts';
 /** Cordis plugin name used by loader diagnostics. */
-export declare const name = "dsh-bilibili";
+export declare const name = "dsh-plugin-bilibili";
 /** Services required before the plugin starts. */
 export declare const inject: string[];
 /** Default cooperative tool-call timeout budget (ms). */

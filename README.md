@@ -1,26 +1,29 @@
-# dsh-bilibili
+# dsh-plugin-bilibili
 
-[涓枃](README.zh.md) | English
+[中文](README.zh.md) | English
 
 A Bilibili retrieval plugin for DeepSeek Harness. After install the agent gains three tools:
 
-- bilibili_search 鈥?find videos by keyword: title, uploader, play count, duration, publish date.
-- bilibili_video 鈥?full metadata for one video: counts, partition, multi-part pages, description.
-- bilibili_subtitles 鈥?the subtitle transcript of one video, merged into plain text.
+- bilibili_search — find videos by keyword: title, uploader, play count, duration, publish date.
+- bilibili_video — full metadata for one video: counts, partition, multi-part pages, description.
+- bilibili_subtitles — the subtitle transcript of one video, merged into plain text.
 
-Anonymous by default: search works with automatic anonymous-cookie bootstrapping, and metadata always works. Set a SESSDATA cookie to unlock login-gated subtitle tracks, which is where most AI subtitles live. The plugin reads metadata and subtitle text only 鈥?it never downloads video or audio streams.
+Anonymous by default: search works with automatic anonymous-cookie bootstrapping, and metadata always works. Set a SESSDATA cookie to unlock login-gated subtitle tracks, which is where most AI subtitles live. The plugin reads metadata and subtitle text only — it never downloads video or audio streams.
 
 ## Install
 
 Run:
 
+    dsh plugin --profile web add dsh-plugin-bilibili
+
+    # or directly from Git:
     dsh plugin --profile web add git+https://github.com/moxingovo/dsh-bilibili
 
 Restart dsh web. New conversations gain bilibili_search, bilibili_video, and bilibili_subtitles automatically.
 
 ## Optional SESSDATA
 
-Log into bilibili.com, open DevTools, go to Application, then Cookies, then the bilibili.com entry, and copy the SESSDATA value 鈥?the bare token, not the whole cookie header. Put it in the environment or in your DSH_HOME .env file:
+Log into bilibili.com, open DevTools, go to Application, then Cookies, then the bilibili.com entry, and copy the SESSDATA value — the bare token, not the whole cookie header. Put it in the environment or in your DSH_HOME .env file:
 
     BILIBILI_SESSDATA=<your-bare-token>
 
@@ -36,11 +39,11 @@ Without it only publicly visible subtitle tracks are returned; videos whose trac
 | searchMaxPageSize | 20 | Page-size ceiling for bilibili_search. |
 | subtitleMaxChars | 80000 | Transcript character cap for bilibili_subtitles, value-level with a truncated flag. |
 
-Override any field in profiles/web/cordis.patch.yml 鈥?later layers win per row.
+Override any field in profiles/web/cordis.patch.yml — later layers win per row.
 
 ## Error codes
 
-Tools fail with structured errors carrying these codes: BILIBILI_RISK_CONTROL for -412 鈥?retry later, the plugin already bootstraps the anonymous cookie; BILIBILI_FORBIDDEN for -403; BILIBILI_NOT_FOUND for -404; BILIBILI_LOGIN_REQUIRED for -101, typically subtitles; BILIBILI_SUBTITLES_UNAVAILABLE when no accessible track or an empty body; BILIBILI_REDIRECT_REFUSED as the credential-safety guard; BILIBILI_BAD_RESPONSE for non-JSON or a missing code envelope; BILIBILI_REQUEST_FAILED for network; BILIBILI_WBI_KEYS_UNAVAILABLE when signing keys are missing.
+Tools fail with structured errors carrying these codes: BILIBILI_RISK_CONTROL for -412 — retry later, the plugin already bootstraps the anonymous cookie; BILIBILI_FORBIDDEN for -403; BILIBILI_NOT_FOUND for -404; BILIBILI_LOGIN_REQUIRED for -101, typically subtitles; BILIBILI_SUBTITLES_UNAVAILABLE when no accessible track or an empty body; BILIBILI_REDIRECT_REFUSED as the credential-safety guard; BILIBILI_BAD_RESPONSE for non-JSON or a missing code envelope; BILIBILI_REQUEST_FAILED for network; BILIBILI_WBI_KEYS_UNAVAILABLE when signing keys are missing.
 
 ## Security
 

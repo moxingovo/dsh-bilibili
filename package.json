@@ -1,6 +1,6 @@
 {
-  "name": "dsh-bilibili",
-  "version": "0.1.0",
+  "name": "dsh-plugin-bilibili",
+  "version": "0.1.1",
   "description": "DeepSeek Harness plugin: Bilibili keyword video search, video metadata, and subtitle transcript tools (bilibili_search / bilibili_video / bilibili_subtitles). Anonymous by default with risk-control bootstrapping; an optional SESSDATA unlocks login-gated subtitles.",
   "keywords": [
     "deepseek-harness",

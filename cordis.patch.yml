@@ -2,7 +2,7 @@
 # Override any field in profiles/web/cordis.patch.yml — later layers win per row.
 - insert:
     - id: bilibili
-      name: 'dsh-bilibili'
+      name: 'dsh-plugin-bilibili'
       config:
         # 可选：B 站 SESSDATA 登录凭证的环境变量名；留空则匿名
         cookieEnv: BILIBILI_SESSDATA

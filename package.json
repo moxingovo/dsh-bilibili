@@ -1,0 +1,56 @@
+{
+  "name": "dsh-bilibili",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin: Bilibili keyword video search, video metadata, and subtitle transcript tools (bilibili_search / bilibili_video / bilibili_subtitles). Anonymous by default with risk-control bootstrapping; an optional SESSDATA unlocks login-gated subtitles.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "bilibili",
+    "video",
+    "subtitles",
+    "agent-tool"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib/**/*",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "skills/**/*"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moxingovo/dsh-bilibili.git"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc.1",
+    "@deepseek-ai/dsh-system-prompt": ">=0.0.1-rc.1",
+    "@deepseek-ai/schemastery": ">=3.18.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "^0.0.1-rc.1",
+    "@deepseek-ai/dsh-system-prompt": "^0.0.1-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.8",
+    "tsdown": "^0.13.0",
+    "@types/node": "^22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  }
+}

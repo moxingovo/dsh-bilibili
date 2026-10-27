@@ -12,6 +12,23 @@ export declare const BILIBILI_PROVIDER_ID = "bilibili-official";
 export declare const BILIBILI_DEFAULT_BASE_URL = "https://api.bilibili.com";
 /** Default browser-identifying User-Agent header. */
 export declare const BILIBILI_DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+/**
+ * The headers a real browser sends to bilibili beside its user agent.
+ *
+ * Risk control fingerprints the whole header set, not only the user agent: a
+ * request carrying `user-agent` alone answers `-412` ("request was banned") or
+ * an empty result page even when a valid SESSDATA cookie is attached. Measured
+ * on 2026-10-27 against `/x/web-interface/wbi/search/type`: UA only -> 0 rows,
+ * UA plus these headers -> 20 rows.
+ */
+export declare const BILIBILI_BROWSER_HEADERS: Readonly<Record<string, string>>;
+/**
+ * Build the browser-consistent header set for one request.
+ * @param userAgent - the configured or default user agent.
+ * @param extra - per-call headers merged last (for example `accept`).
+ * @returns a fresh header record every request may mutate.
+ */
+export declare function browserHeaders(userAgent: string, extra?: Readonly<Record<string, string>>): Record<string, string>;
 /** Default per-request cooperative timeout (ms). */
 export declare const BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 /** How long resolved WBI keys are reused before re-fetching from the nav API. */
@@ -28,6 +45,14 @@ export interface BilibiliOfficialProviderOptions {
     baseUrl?: string;
     /** Optional Cookie header value resolved by the plugin from the environment. */
     cookie?: string;
+    /**
+     * File holding a bare SESSDATA token or a full Cookie header. Re-read on
+     * every request, so a rotated token applies without restarting the app; a
+     * missing or unreadable file is ignored.
+     */
+    cookieFile?: string;
+    /** Environment variable naming the cookie, read when neither cookie nor cookieFile resolves. */
+    cookieEnv?: string;
     /** User-Agent header; defaults to BILIBILI_DEFAULT_USER_AGENT. */
     userAgent?: string;
     /** Per-request timeout (ms); defaults to BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS. */
@@ -110,6 +135,16 @@ export declare class BilibiliOfficialProvider {
      * @returns the header value, when anything is present.
      */
     private cookieHeader;
+    /** The effective user agent for every request this provider makes. */
+    private userAgent;
+    /**
+     * Resolve the optional user credential. The literal option wins, then a
+     * readable cookie file (re-read on every request, so a rotated token applies
+     * without a restart), then the environment variable. A bare SESSDATA token
+     * and a full Cookie header are both accepted.
+     * @returns the credential text, or undefined for anonymous access.
+     */
+    private resolveCookie;
     /** Epoch milliseconds from the injected clock or the real one. */
     private now;
     /** Unix seconds from the injected clock or the real one. */

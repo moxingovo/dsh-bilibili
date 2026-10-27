@@ -14,7 +14,7 @@ import { BilibiliOfficialProvider, BILIBILI_DEFAULT_BASE_URL, BILIBILI_DEFAULT_R
 import { applyBilibiliSearchTool, applyBilibiliVideoTool, applyBilibiliSubtitleTool, applyBilibiliPlayUrlTool, BILIBILI_SUBTITLES_MAX_CHARS } from './tools.ts'
 import { applyBilibiliFramesTool } from './frames.ts'
 
-export { BilibiliOfficialProvider, BILIBILI_DEFAULT_BASE_URL, BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS, BILIBILI_DEFAULT_SUBTITLE_LANGUAGE, BILIBILI_DEFAULT_USER_AGENT, BILIBILI_PROVIDER_ID, BILIBILI_SEARCH_MAX_PAGE_SIZE, BILIBILI_WBI_KEY_TTL_MS, BILIBILI_COOKIE_BOOTSTRAP_URL, mapSearchData, mapVideoData, subtitleTracks, selectSubtitleTrack, parseSubtitleCues } from './provider.ts'
+export { BilibiliOfficialProvider, BILIBILI_BROWSER_HEADERS, BILIBILI_DEFAULT_BASE_URL, BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS, BILIBILI_DEFAULT_SUBTITLE_LANGUAGE, BILIBILI_DEFAULT_USER_AGENT, browserHeaders, BILIBILI_PROVIDER_ID, BILIBILI_SEARCH_MAX_PAGE_SIZE, BILIBILI_WBI_KEY_TTL_MS, BILIBILI_COOKIE_BOOTSTRAP_URL, mapSearchData, mapVideoData, subtitleTracks, selectSubtitleTrack, parseSubtitleCues } from './provider.ts'
 export type { BilibiliOfficialProviderOptions } from './provider.ts'
 export { BilibiliError } from './types.ts'
 export type {
@@ -60,11 +60,13 @@ export { MIXIN_KEY_ENC_TAB, mixinKey, wbiSign } from './wbi.ts'
 export {
   BILIBILI_FRAMES_DEFAULT_COUNT,
   BILIBILI_FRAMES_MAX_COUNT,
+  DEFAULT_FFMPEG_ENV,
   FRAME_MODES,
   applyBilibiliFramesTool,
   parseFramesArgs,
+  resolveFfmpegCommand,
 } from './frames.ts'
-export type { BilibiliFrameImage, BilibiliFrameMode, BilibiliFramesArgs, BilibiliFramesValue } from './frames.ts'
+export type { BilibiliFrameImage, BilibiliFrameMode, BilibiliFramesArgs, BilibiliFramesOptions, BilibiliFramesValue } from './frames.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'dsh-plugin-bilibili'
@@ -84,8 +86,16 @@ export interface Config {
   baseUrl?: string
   /** Literal Cookie header value; prefer cookieEnv so no secret enters config files. */
   cookie?: string
+  /**
+   * File holding a bare SESSDATA token or a full Cookie header. Re-read on
+   * every request, so rotating the token needs no restart and no config edit.
+   * Takes precedence over cookieEnv; an unreadable file falls through.
+   */
+  cookieFile?: string
   /** Environment variable naming the cookie; defaults to BILIBILI_SESSDATA. */
   cookieEnv?: string
+  /** ffmpeg executable for bilibili_frames extract mode (absolute path or PATH name). */
+  ffmpegPath?: string
   /** User-Agent header. */
   userAgent?: string
   /** Per-request timeout (ms). */
@@ -103,7 +113,9 @@ export interface Config {
 export const Config: z<Config> = z.object({
   baseUrl: z.string(),
   cookie: z.string().role('secret'),
+  cookieFile: z.string(),
   cookieEnv: z.string().default(DEFAULT_COOKIE_ENV),
+  ffmpegPath: z.string(),
   userAgent: z.string(),
   requestTimeoutMs: z.number().min(1).default(BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS),
   subtitleLanguage: z.string().default(BILIBILI_DEFAULT_SUBTITLE_LANGUAGE),
@@ -144,10 +156,12 @@ export function apply(ctx: Context, config: Config): void {
   }
   const literalCookie = configured(resolved.cookie)
   const cookieEnvName = resolved.cookieEnv
-  const cookieValue = literalCookie ?? process.env[cookieEnvName] ?? undefined
+  const cookieFile = configured(resolved.cookieFile)
   const provider = new BilibiliOfficialProvider({
     baseUrl: baseUrl ?? BILIBILI_DEFAULT_BASE_URL,
-    ...cookieValue === undefined ? {} : { cookie: cookieValue },
+    ...literalCookie === undefined ? {} : { cookie: literalCookie },
+    ...cookieFile === undefined ? {} : { cookieFile },
+    cookieEnv: cookieEnvName,
     userAgent: configured(resolved.userAgent) ?? BILIBILI_DEFAULT_USER_AGENT,
     requestTimeoutMs: resolved.requestTimeoutMs,
     subtitleLanguage: configured(resolved.subtitleLanguage) ?? BILIBILI_DEFAULT_SUBTITLE_LANGUAGE,
@@ -169,5 +183,6 @@ export function apply(ctx: Context, config: Config): void {
   // therefore checks `ctx.get('attachments')` when it runs and fails with a
   // structured error where no store is mounted, instead of staying invisible
   // everywhere the host-domain mount is the only mount.
-  applyBilibiliFramesTool(ctx, provider, resolved.timeoutMs)
+  const ffmpegPath = configured(resolved.ffmpegPath)
+  applyBilibiliFramesTool(ctx, provider, resolved.timeoutMs, ffmpegPath === undefined ? {} : { ffmpegPath })
 }

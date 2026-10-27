@@ -60,7 +60,9 @@ BILIBILI_SESSDATA=<你的裸 token>
 |---|---|---|
 | `baseUrl` | `https://api.bilibili.com` | API 主机。 |
 | `cookie` | — | 字面量 SESSDATA（secret；优先用 `cookieEnv`）。 |
+| `cookieFile` | — | 存放裸 SESSDATA token 或完整 Cookie 头的文件；每次请求重新读取，换 token 不用重启。优先于 `cookieEnv`；文件不可读时回落。 |
 | `cookieEnv` | `BILIBILI_SESSDATA` | 存放可选 SESSDATA token 的环境变量名。 |
+| `ffmpegPath` | — | `bilibili_frames` extract 模式用的 ffmpeg（绝对路径或 PATH 名）。缺省读 `BILI_FFMPEG`，再回落 PATH 上的 `ffmpeg`。 |
 | `userAgent` | Chrome 126 桌面 UA | User-Agent 头。 |
 | `requestTimeoutMs` | `30000` | 单请求超时，毫秒。 |
 | `subtitleLanguage` | `zh-CN` | 首选字幕语言标签；精确匹配优先，否则取第一条轨。 |

@@ -1,12 +1,15 @@
 /** dsh-bilibili plugin tests against the published @deepseek-ai peer deps. */
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BilibiliOfficialProvider, mapPlayUrlData, mapSearchData, mapVideoData, parseSubtitleCues, previewPicOf, selectSubtitleTrack, subtitleTracks } from '../src/provider.ts'
+import { BilibiliOfficialProvider, browserHeaders, BILIBILI_BROWSER_HEADERS, mapPlayUrlData, mapSearchData, mapVideoData, parseSubtitleCues, previewPicOf, selectSubtitleTrack, subtitleTracks } from '../src/provider.ts'
 import { BilibiliError } from '../src/types.ts'
 import { boundTranscript, formatPlayUrlOutput, formatSearchOutput, formatSubtitleOutput, formatVideoOutput, parsePlayUrlArgs, parseSearchArgs, parseSubtitleArgs, parseVideoArgs, subtitleOutput } from '../src/tools.ts'
-import { parseFramesArgs } from '../src/frames.ts'
+import { DEFAULT_FFMPEG_ENV, parseFramesArgs, resolveFfmpegCommand } from '../src/frames.ts'
 import * as plugin from '../src/index.ts'
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
@@ -105,7 +108,7 @@ describe('formatting', () => {
 
 describe('provider request handling', () => {
   it('wraps a bare token as SESSDATA and scopes the cookie to the API host', async () => {
-    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ code: 0, message: '', data: {} }))
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse({ code: 0, message: '', data: {} }))
     await new BilibiliOfficialProvider({ cookie: 'bare-token' }).video({ bvid: 'BV1GJ411x7h7' })
     const url = spy.mock.calls[0]?.[0]
     const init = spy.mock.calls[0]?.[1] as RequestInit
@@ -140,7 +143,7 @@ describe('provider request handling', () => {
   })
 
   it('passes a full cookie header through unchanged', async () => {
-    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ code: 0, message: '', data: {} }))
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse({ code: 0, message: '', data: {} }))
     await new BilibiliOfficialProvider({ cookie: 'SESSDATA=abc; bili_jct=xyz' }).video({ bvid: 'BV1GJ411x7h7' })
     const init = spy.mock.calls[0]?.[1] as RequestInit
     expect((init.headers as Record<string, string>).cookie).toBe('SESSDATA=abc; bili_jct=xyz')
@@ -245,5 +248,79 @@ describe('playurl and frames', () => {
     expect(() => parseFramesArgs({ bvid: 'BV1GJ411x7h7', mode: 'bogus' })).toThrow('mode must be one of')
     expect(() => parseFramesArgs({ bvid: 'BV1GJ411x7h7', count: 0 })).toThrow('count must be an integer between 1 and')
     expect(() => parseFramesArgs({ bvid: '' })).toThrow('bvid must be a non-empty string')
+  })
+})
+
+describe('browser headers', () => {
+  it('sends the full browser header set instead of only a user agent', () => {
+    const headers = browserHeaders('ua')
+    expect(headers['user-agent']).toBe('ua')
+    expect(headers.referer).toBe('https://www.bilibili.com/')
+    expect(headers.origin).toBe('https://www.bilibili.com')
+    expect(headers['accept-language']).toContain('zh-CN')
+    expect(headers['sec-ch-ua']).toContain('Chromium')
+    expect(headers['sec-fetch-site']).toBe('same-site')
+  })
+
+  it('merges per-call headers without mutating the shared set', () => {
+    const headers = browserHeaders('ua', { accept: 'application/json' })
+    expect(headers.accept).toBe('application/json')
+    expect(BILIBILI_BROWSER_HEADERS).not.toHaveProperty('accept')
+  })
+
+  it('attaches them to a provider request', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse({ code: 0, message: '', data: {} }))
+    await new BilibiliOfficialProvider().video({ bvid: 'BV1GJ411x7h7' })
+    const headers = (spy.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>
+    expect(headers.referer).toBe('https://www.bilibili.com/')
+    expect(headers['sec-ch-ua']).toContain('Chromium')
+  })
+})
+
+describe('cookie sources', () => {
+  it('re-reads a cookie file on every request, so rotation needs no restart', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-bili-cookie-'))
+    const file = join(dir, 'sessdata.txt')
+    writeFileSync(file, 'first-token\n')
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse({ code: 0, message: '', data: {} }))
+    const provider = new BilibiliOfficialProvider({ cookieFile: file })
+    await provider.video({ bvid: 'BV1GJ411x7h7' })
+    writeFileSync(file, 'second-token\n')
+    await provider.video({ bvid: 'BV1GJ411x7h7' })
+    const first = (spy.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>
+    const second = (spy.mock.calls[1]?.[1] as RequestInit).headers as Record<string, string>
+    expect(first.cookie).toBe('SESSDATA=first-token')
+    expect(second.cookie).toBe('SESSDATA=second-token')
+  })
+
+  it('prefers the literal option, then the file, then the environment', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-bili-cookie-'))
+    const file = join(dir, 'sessdata.txt')
+    writeFileSync(file, 'from-file')
+    process.env.DSH_BILI_TEST_ENV = 'from-env'
+    try {
+      const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse({ code: 0, message: '', data: {} }))
+      await new BilibiliOfficialProvider({ cookie: 'from-literal', cookieFile: file, cookieEnv: 'DSH_BILI_TEST_ENV' }).video({ bvid: 'BV1GJ411x7h7' })
+      await new BilibiliOfficialProvider({ cookieFile: file, cookieEnv: 'DSH_BILI_TEST_ENV' }).video({ bvid: 'BV1GJ411x7h7' })
+      await new BilibiliOfficialProvider({ cookieFile: join(dir, 'missing.txt'), cookieEnv: 'DSH_BILI_TEST_ENV' }).video({ bvid: 'BV1GJ411x7h7' })
+      const cookies = spy.mock.calls.map(call => ((call[1] as RequestInit).headers as Record<string, string>).cookie)
+      expect(cookies).toEqual(['SESSDATA=from-literal', 'SESSDATA=from-file', 'SESSDATA=from-env'])
+    } finally {
+      delete process.env.DSH_BILI_TEST_ENV
+    }
+  })
+})
+
+describe('ffmpeg resolution', () => {
+  it('prefers the configured path, then the environment, then PATH', () => {
+    expect(resolveFfmpegCommand({ ffmpegPath: 'D:/ff/ffmpeg.exe' }, {})).toBe('D:/ff/ffmpeg.exe')
+    expect(resolveFfmpegCommand({}, { [DEFAULT_FFMPEG_ENV]: 'E:/ff/ffmpeg.exe' })).toBe('E:/ff/ffmpeg.exe')
+    expect(resolveFfmpegCommand({ ffmpegPath: '   ' }, {})).toBe('ffmpeg')
+    expect(resolveFfmpegCommand({}, {})).toBe('ffmpeg')
+  })
+
+  it('honours a custom environment variable name', () => {
+    expect(resolveFfmpegCommand({ ffmpegEnv: 'MY_FFMPEG' }, { MY_FFMPEG: 'x/ffmpeg' })).toBe('x/ffmpeg')
+    expect(resolveFfmpegCommand({ ffmpegEnv: 'MY_FFMPEG' }, { [DEFAULT_FFMPEG_ENV]: 'y/ffmpeg' })).toBe('ffmpeg')
   })
 })

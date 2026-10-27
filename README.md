@@ -61,7 +61,9 @@ with the structured code `BILIBILI_LOGIN_REQUIRED`. A bare token is fine — the
 |---|---|---|
 | `baseUrl` | `https://api.bilibili.com` | API host. |
 | `cookie` | — | Literal SESSDATA token (secret; prefer `cookieEnv`). |
+| `cookieFile` | — | File holding a bare `SESSDATA` token or a full Cookie header; re-read on every request, so a rotated token needs no restart. Wins over `cookieEnv`; an unreadable file falls through. |
 | `cookieEnv` | `BILIBILI_SESSDATA` | Environment variable naming the optional SESSDATA token. |
+| `ffmpegPath` | — | ffmpeg executable for `bilibili_frames` extract mode (absolute path or PATH name). Defaults to `BILI_FFMPEG`, then `ffmpeg` on PATH. |
 | `userAgent` | Chrome 126 desktop UA | User-Agent header. |
 | `requestTimeoutMs` | `30000` | Per-request timeout in ms. |
 | `subtitleLanguage` | `zh-CN` | Preferred subtitle language tag; exact match wins, else the first track. |

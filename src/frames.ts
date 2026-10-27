@@ -9,7 +9,8 @@
  * - the video cover image as a single-frame fallback.
  *
  * `extract` mode downloads the direct mp4 and runs ffmpeg to produce evenly
- * spaced PNG frames; it requires ffmpeg on PATH and is capped by the
+ * spaced PNG frames; the executable comes from the plugin config `ffmpegPath`,
+ * then the BILI_FFMPEG environment variable, then PATH. It is capped by the
  * deployment's per-message image limits.
  *
  * The tool strictly gates on the calling route's declared image input (the
@@ -27,6 +28,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolExecution, ToolResult } from '@deepseek-ai/dsh-tools'
+import { browserHeaders, BILIBILI_DEFAULT_USER_AGENT } from './provider.ts'
 import type { BilibiliProviderLike } from './types.ts'
 
 /**
@@ -48,6 +50,35 @@ declare module '@deepseek-ai/dsh-llm' {
 
 /** Default frame count for `extract` mode. */
 export const BILIBILI_FRAMES_DEFAULT_COUNT = 8
+
+/** Environment variable naming an explicit ffmpeg executable. */
+export const DEFAULT_FFMPEG_ENV = 'BILI_FFMPEG'
+
+/** Options for the frames tool beyond the provider instance. */
+export interface BilibiliFramesOptions {
+  /** ffmpeg executable: an absolute path or a PATH name; defaults to `ffmpeg`. */
+  ffmpegPath?: string
+  /** Environment variable consulted when `ffmpegPath` is unset; defaults to BILI_FFMPEG. */
+  ffmpegEnv?: string
+}
+
+/**
+ * Resolve the ffmpeg executable the `extract` mode runs.
+ *
+ * A host whose ffmpeg is outside PATH (or whose process environment predates
+ * the install) can name it here instead of changing PATH for the whole system.
+ * @param options - the frames options from plugin config.
+ * @param env - the environment to read (injected for tests).
+ * @returns the configured path, else the environment override, else `ffmpeg`.
+ */
+export function resolveFfmpegCommand(options: BilibiliFramesOptions = {}, env: Readonly<Record<string, string | undefined>> = process.env): string {
+  const configured = options.ffmpegPath?.trim()
+  if (configured !== undefined && configured.length > 0) return configured
+  const envName = options.ffmpegEnv ?? DEFAULT_FFMPEG_ENV
+  const fromEnv = env[envName]?.trim()
+  if (fromEnv !== undefined && fromEnv.length > 0) return fromEnv
+  return 'ffmpeg'
+}
 
 /** Upper bound on requested frames; the per-message image cap still applies. */
 export const BILIBILI_FRAMES_MAX_COUNT = 12
@@ -159,31 +190,35 @@ function runCommand(command: string, args: readonly string[], signal?: AbortSign
   })
 }
 
-/** Detect ffmpeg on PATH, cached per process. */
-let ffmpegAvailable: boolean | undefined
-async function hasFfmpeg(): Promise<boolean> {
-  if (ffmpegAvailable !== undefined) return ffmpegAvailable
+/**
+ * Detect one ffmpeg executable. Only a successful probe is cached: an ffmpeg
+ * installed after the first failure is picked up by the next call instead of
+ * requiring a process restart.
+ */
+const ffmpegReady = new Set<string>()
+async function hasFfmpeg(command: string): Promise<boolean> {
+  if (ffmpegReady.has(command)) return true
   try {
-    await runCommand('ffmpeg', ['-version'])
-    ffmpegAvailable = true
+    await runCommand(command, ['-version'])
+    ffmpegReady.add(command)
+    return true
   } catch {
-    ffmpegAvailable = false
+    return false
   }
-  return ffmpegAvailable
 }
 
 /** Download one URL into a byte buffer (no redirects, no cookie). */
 async function downloadBytes(url: string, signal?: AbortSignal): Promise<Uint8Array> {
-  const response = await fetch(url, { ...signal === undefined ? {} : { signal }, redirect: 'manual', headers: { 'user-agent': 'Mozilla/5.0' } })
+  const response = await fetch(url, { ...signal === undefined ? {} : { signal }, redirect: 'manual', headers: browserHeaders(BILIBILI_DEFAULT_USER_AGENT) })
   if (!response.ok) throw new Error('download failed (HTTP ' + String(response.status) + ')')
   return new Uint8Array(await response.arrayBuffer())
 }
 
 /** Extract evenly spaced frames with ffmpeg into the target directory. */
-async function extractFrames(videoPath: string, outDir: string, duration: number, count: number, signal?: AbortSignal): Promise<string[]> {
+async function extractFrames(ffmpeg: string, videoPath: string, outDir: string, duration: number, count: number, signal?: AbortSignal): Promise<string[]> {
   const fps = Math.min(count / Math.max(duration, 1), 60)
   const pattern = join(outDir, 'frame-%02d.png')
-  await runCommand('ffmpeg', [
+  await runCommand(ffmpeg, [
     '-y', '-i', videoPath,
     '-vf', "fps=" + fps.toFixed(4) + ",scale='min(512,iw)':-2",
     '-frames:v', String(count),
@@ -228,14 +263,15 @@ function framesContent(value: BilibiliFramesValue): ContentBlock[] {
  *   `llm` services plus the provider instance.
  * @param service - the provider instance the tool executes against.
  * @param timeoutMs - the cooperative tool-call budget (ms).
+ * @param options - ffmpeg resolution options for `extract` mode.
  */
-export function applyBilibiliFramesTool(ctx: Context, service: BilibiliProviderLike, timeoutMs: number): void {
+export function applyBilibiliFramesTool(ctx: Context, service: BilibiliProviderLike, timeoutMs: number, options: BilibiliFramesOptions = {}): void {
   ctx.tools.register(defineTool({
     name: 'bilibili_frames',
     description: 'Sample frames of one bilibili video and return them as images so you can see the actual footage. Requires the current model to accept image input. auto mode uses the preview sprite (recommended); extract mode downloads the video and extracts frames with ffmpeg.',
     parameters: {
       bvid: { type: 'string', required: true, description: 'The video BV id.' },
-      mode: { type: 'string', enum: [...FRAME_MODES], description: 'auto (default): preview sprite, falling back to the cover. extract: download + ffmpeg frame extraction (requires ffmpeg on PATH).' },
+      mode: { type: 'string', enum: [...FRAME_MODES], description: 'auto (default): preview sprite, falling back to the cover. extract: download + ffmpeg frame extraction (ffmpeg from the ffmpegPath config, BILI_FFMPEG, or PATH).' },
       count: { type: 'number', description: 'Number of frames for extract mode (1-12, default 8).' },
     },
     output: {
@@ -294,13 +330,14 @@ export function applyBilibiliFramesTool(ctx: Context, service: BilibiliProviderL
         source = 'extract'
         const tmp = await mkdtemp(join(tmpdir(), 'dsh-bili-frames-'))
         try {
-          if (!await hasFfmpeg()) {
-            throw new Error('bilibili_frames: ffmpeg is not available on this host; use mode=auto (preview sprite) or install ffmpeg')
+          const ffmpeg = resolveFfmpegCommand(options, process.env)
+          if (!await hasFfmpeg(ffmpeg)) {
+            throw new Error('bilibili_frames: ffmpeg is not available (' + ffmpeg + '); set the plugin config ffmpegPath (or BILI_FFMPEG), use mode=auto (preview sprite), or install ffmpeg')
           }
           const play = await service.playurl({ bvid: input.bvid }, exec.signal)
           const videoPath = join(tmp, 'video.mp4')
           await writeFile(videoPath, await downloadBytes(play.url, exec.signal))
-          const frames = await extractFrames(videoPath, tmp, detail.duration, input.count, exec.signal)
+          const frames = await extractFrames(ffmpeg, videoPath, tmp, detail.duration, input.count, exec.signal)
           for (const framePath of frames) {
             const data = new Uint8Array(await readFile(framePath))
             const ref = await attachments.saveImage({ data, mediaType: 'image/png', name: input.bvid + '-' + framePath.split(/[\\/]/).pop() })

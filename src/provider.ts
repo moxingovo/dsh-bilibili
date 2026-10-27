@@ -6,6 +6,7 @@
  * only ever sent to the configured API host - never to subtitle CDN hosts.
  */
 
+import { readFileSync } from 'node:fs'
 import type {
   BilibiliPlayUrlResult,
   BilibiliPlayerInfo,
@@ -30,6 +31,37 @@ export const BILIBILI_DEFAULT_BASE_URL = 'https://api.bilibili.com'
 /** Default browser-identifying User-Agent header. */
 export const BILIBILI_DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
 
+/**
+ * The headers a real browser sends to bilibili beside its user agent.
+ *
+ * Risk control fingerprints the whole header set, not only the user agent: a
+ * request carrying `user-agent` alone answers `-412` ("request was banned") or
+ * an empty result page even when a valid SESSDATA cookie is attached. Measured
+ * on 2026-10-27 against `/x/web-interface/wbi/search/type`: UA only -> 0 rows,
+ * UA plus these headers -> 20 rows.
+ */
+export const BILIBILI_BROWSER_HEADERS: Readonly<Record<string, string>> = {
+  referer: 'https://www.bilibili.com/',
+  origin: 'https://www.bilibili.com',
+  'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  'sec-ch-ua': '"Chromium";v="126", "Not:A-Brand";v="24"',
+  'sec-ch-ua-mobile': '?0',
+  'sec-ch-ua-platform': '"Windows"',
+  'sec-fetch-dest': 'empty',
+  'sec-fetch-mode': 'cors',
+  'sec-fetch-site': 'same-site',
+}
+
+/**
+ * Build the browser-consistent header set for one request.
+ * @param userAgent - the configured or default user agent.
+ * @param extra - per-call headers merged last (for example `accept`).
+ * @returns a fresh header record every request may mutate.
+ */
+export function browserHeaders(userAgent: string, extra: Readonly<Record<string, string>> = {}): Record<string, string> {
+  return { 'user-agent': userAgent, ...BILIBILI_BROWSER_HEADERS, ...extra }
+}
+
 /** Default per-request cooperative timeout (ms). */
 export const BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 
@@ -51,6 +83,14 @@ export interface BilibiliOfficialProviderOptions {
   baseUrl?: string
   /** Optional Cookie header value resolved by the plugin from the environment. */
   cookie?: string
+  /**
+   * File holding a bare SESSDATA token or a full Cookie header. Re-read on
+   * every request, so a rotated token applies without restarting the app; a
+   * missing or unreadable file is ignored.
+   */
+  cookieFile?: string
+  /** Environment variable naming the cookie, read when neither cookie nor cookieFile resolves. */
+  cookieEnv?: string
   /** User-Agent header; defaults to BILIBILI_DEFAULT_USER_AGENT. */
   userAgent?: string
   /** Per-request timeout (ms); defaults to BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS. */
@@ -156,9 +196,7 @@ export class BilibiliOfficialProvider {
     signals.push(AbortSignal.timeout(timeoutMs))
     let response: Response
     try {
-      response = await fetch(absolute, { signal: AbortSignal.any(signals), redirect: 'manual', headers: {
-        'user-agent': this.options.userAgent ?? BILIBILI_DEFAULT_USER_AGENT,
-      } })
+      response = await fetch(absolute, { signal: AbortSignal.any(signals), redirect: 'manual', headers: browserHeaders(this.userAgent()) })
     } catch (cause: unknown) {
       if (signal?.aborted === true) throw cause
       throw new BilibiliError('bilibili image fetch failed: ' + String(cause), 'BILIBILI_REQUEST_FAILED', { cause })
@@ -205,11 +243,8 @@ export class BilibiliOfficialProvider {
   private async requestJson(path: string, params: Readonly<Record<string, string | number>>, signal?: AbortSignal): Promise<unknown> {
     const url = new URL(path, this.options.baseUrl ?? BILIBILI_DEFAULT_BASE_URL)
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value))
-    const cookie = this.cookieHeader(this.options.cookie)
-    const headers: Record<string, string> = {
-      accept: 'application/json',
-      'user-agent': this.options.userAgent ?? BILIBILI_DEFAULT_USER_AGENT,
-    }
+    const cookie = this.cookieHeader(this.resolveCookie())
+    const headers = browserHeaders(this.userAgent(), { accept: 'application/json' })
     if (cookie !== undefined) headers.cookie = cookie
     const timeoutMs = this.options.requestTimeoutMs ?? BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS
     const signals: AbortSignal[] = []
@@ -260,10 +295,7 @@ export class BilibiliOfficialProvider {
     signals.push(AbortSignal.timeout(timeoutMs))
     let response: Response
     try {
-      response = await fetch(url, { signal: AbortSignal.any(signals), redirect: 'manual', headers: {
-        accept: 'application/json',
-        'user-agent': this.options.userAgent ?? BILIBILI_DEFAULT_USER_AGENT,
-      } })
+      response = await fetch(url, { signal: AbortSignal.any(signals), redirect: 'manual', headers: browserHeaders(this.userAgent(), { accept: 'application/json' }) })
     } catch (cause: unknown) {
       if (signal?.aborted === true) throw cause
       throw new BilibiliError('bilibili subtitle fetch failed: ' + String(cause), 'BILIBILI_REQUEST_FAILED', { cause })
@@ -297,7 +329,7 @@ export class BilibiliOfficialProvider {
       const response = await fetch(BILIBILI_COOKIE_BOOTSTRAP_URL, {
         signal: AbortSignal.any(signals),
         redirect: 'manual',
-        headers: { 'user-agent': this.options.userAgent ?? BILIBILI_DEFAULT_USER_AGENT },
+        headers: browserHeaders(this.userAgent()),
       })
       this.captureCookies(response)
     } catch {
@@ -330,6 +362,38 @@ export class BilibiliOfficialProvider {
       parts.push(userCookie.includes('=') ? userCookie : 'SESSDATA=' + userCookie)
     }
     return parts.length > 0 ? parts.join('; ') : undefined
+  }
+
+  /** The effective user agent for every request this provider makes. */
+  private userAgent(): string {
+    return this.options.userAgent ?? BILIBILI_DEFAULT_USER_AGENT
+  }
+
+  /**
+   * Resolve the optional user credential. The literal option wins, then a
+   * readable cookie file (re-read on every request, so a rotated token applies
+   * without a restart), then the environment variable. A bare SESSDATA token
+   * and a full Cookie header are both accepted.
+   * @returns the credential text, or undefined for anonymous access.
+   */
+  private resolveCookie(): string | undefined {
+    const literal = this.options.cookie
+    if (literal !== undefined && literal.length > 0) return literal
+    const file = this.options.cookieFile
+    if (file !== undefined && file.length > 0) {
+      try {
+        const text = readFileSync(file, 'utf8').trim()
+        if (text.length > 0) return text
+      } catch {
+        // A missing or unreadable file is not an error: fall through to the environment.
+      }
+    }
+    const envName = this.options.cookieEnv
+    if (envName !== undefined && envName.length > 0) {
+      const value = process.env[envName]
+      if (value !== undefined && value.length > 0) return value
+    }
+    return undefined
   }
 
   /** Epoch milliseconds from the injected clock or the real one. */

@@ -9,7 +9,8 @@
  * - the video cover image as a single-frame fallback.
  *
  * `extract` mode downloads the direct mp4 and runs ffmpeg to produce evenly
- * spaced PNG frames; it requires ffmpeg on PATH and is capped by the
+ * spaced PNG frames; the executable comes from the plugin config `ffmpegPath`,
+ * then the BILI_FFMPEG environment variable, then PATH. It is capped by the
  * deployment's per-message image limits.
  *
  * The tool strictly gates on the calling route's declared image input (the
@@ -38,6 +39,25 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 /** Default frame count for `extract` mode. */
 export declare const BILIBILI_FRAMES_DEFAULT_COUNT = 8;
+/** Environment variable naming an explicit ffmpeg executable. */
+export declare const DEFAULT_FFMPEG_ENV = "BILI_FFMPEG";
+/** Options for the frames tool beyond the provider instance. */
+export interface BilibiliFramesOptions {
+    /** ffmpeg executable: an absolute path or a PATH name; defaults to `ffmpeg`. */
+    ffmpegPath?: string;
+    /** Environment variable consulted when `ffmpegPath` is unset; defaults to BILI_FFMPEG. */
+    ffmpegEnv?: string;
+}
+/**
+ * Resolve the ffmpeg executable the `extract` mode runs.
+ *
+ * A host whose ffmpeg is outside PATH (or whose process environment predates
+ * the install) can name it here instead of changing PATH for the whole system.
+ * @param options - the frames options from plugin config.
+ * @param env - the environment to read (injected for tests).
+ * @returns the configured path, else the environment override, else `ffmpeg`.
+ */
+export declare function resolveFfmpegCommand(options?: BilibiliFramesOptions, env?: Readonly<Record<string, string | undefined>>): string;
 /** Upper bound on requested frames; the per-message image cap still applies. */
 export declare const BILIBILI_FRAMES_MAX_COUNT = 12;
 /** The modes `bilibili_frames` accepts. */
@@ -88,5 +108,6 @@ export declare function parseFramesArgs(args: {
  *   `llm` services plus the provider instance.
  * @param service - the provider instance the tool executes against.
  * @param timeoutMs - the cooperative tool-call budget (ms).
+ * @param options - ffmpeg resolution options for `extract` mode.
  */
-export declare function applyBilibiliFramesTool(ctx: Context, service: BilibiliProviderLike, timeoutMs: number): void;
+export declare function applyBilibiliFramesTool(ctx: Context, service: BilibiliProviderLike, timeoutMs: number, options?: BilibiliFramesOptions): void;

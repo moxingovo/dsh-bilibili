@@ -53,7 +53,7 @@ git push && git push --tags
 
 push 时会弹浏览器让你登录 GitHub（Git Credential Manager，Git for Windows 自带）；
 若弹窗失败：github.com → Settings → Developer settings → Personal access tokens (classic)
-→ 生成一个勾选 `repo` 的 token，登录时用户名填 moxingovo、密码粘贴 token。
+→ 生成一个勾选 `repo` 的 token，登录时用户名填 lili844、密码粘贴 token。
 
 推上去之后 `.github/workflows/release.yml` 会依次做：
 

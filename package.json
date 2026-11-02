@@ -29,7 +29,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/moxingovo/dsh-bilibili.git"
+    "url": "git+https://github.com/lili844/dsh-bilibili.git"
   },
   "dsh": {
     "bundle": {

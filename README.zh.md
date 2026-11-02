@@ -1,6 +1,6 @@
 # dsh-plugin-bilibili
 
-**简体中文** | [English](README.md) · [更新日志](CHANGELOG.md) · [下载](https://github.com/moxingovo/dsh-bilibili/releases)
+**简体中文** | [English](README.md) · [更新日志](CHANGELOG.md) · [下载](https://github.com/lili844/dsh-bilibili/releases)
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 打造的 **B 站检索插件**。
 安装后 Agent 获得五个工具：
@@ -21,9 +21,9 @@
 
 > 非官方社区插件，与 DeepSeek、哔哩哔哩官方均无关。
 >
-> **Harness 兼容性**：**0.2.3** 已在 **DeepSeek Harness 0.1.7-rc.2** 与 **0.1.6-alpha.2**
-> （Typert API Gateway）上验证，同一份构建同时服务两条线；0.1.0–0.1.5 线同样可用 ——
-> 本插件不使用 0.1.6+ 的 codec API。版本对照见[兼容性](#兼容性)。
+> **Harness 兼容性**：**0.3.0** 已在 **DeepSeek Harness 0.2.0-rc.2** 上验证（typecheck、build
+> 与全部 24 项测试）；更早的插件版本在 0.1.x 线同样可用 —— 本插件不使用 0.1.6+ 的 codec API。
+> 版本对照见[兼容性](#兼容性)。
 
 ## 安装
 
@@ -31,7 +31,7 @@
 dsh plugin --profile web add dsh-plugin-bilibili
 
 # 或直接从 Git 安装：
-dsh plugin --profile web add git+https://github.com/moxingovo/dsh-bilibili
+dsh plugin --profile web add git+https://github.com/lili844/dsh-bilibili
 ```
 
 重启 `dsh web`，新会话即获得 `bilibili_search`、`bilibili_video`、`bilibili_subtitles`、

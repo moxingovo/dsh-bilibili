@@ -1,6 +1,6 @@
 # dsh-plugin-bilibili
 
-[中文](README.zh.md) | **English** · [Changelog](CHANGELOG.md) · [Releases](https://github.com/moxingovo/dsh-bilibili/releases)
+[中文](README.zh.md) | **English** · [Changelog](CHANGELOG.md) · [Releases](https://github.com/lili844/dsh-bilibili/releases)
 
 A **Bilibili retrieval plugin** for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
 After install the agent gains five tools:
@@ -23,9 +23,9 @@ See [Persona: Lili](#persona-lili).
 
 > Unofficial community plugin — not affiliated with DeepSeek or Bilibili.
 >
-> **Harness compatibility**: **0.2.3** is verified on **DeepSeek Harness 0.1.7-rc.2** and
-> **0.1.6-alpha.2** (Typert API Gateway) from one build. The 0.1.0–0.1.5 line works as well —
-> nothing in the plugin uses the 0.1.6+ codec API. Version map in [Compatibility](#compatibility).
+> **Harness compatibility**: **0.3.0** is verified on **DeepSeek Harness 0.2.0-rc.2** (typecheck,
+> build and all 24 tests). Earlier plugin lines still work on 0.1.x — nothing in the plugin uses
+> the 0.1.6+ codec API. Version map in [Compatibility](#compatibility).
 
 ## Install
 
@@ -33,7 +33,7 @@ See [Persona: Lili](#persona-lili).
 dsh plugin --profile web add dsh-plugin-bilibili
 
 # or directly from Git:
-dsh plugin --profile web add git+https://github.com/moxingovo/dsh-bilibili
+dsh plugin --profile web add git+https://github.com/lili844/dsh-bilibili
 ```
 
 Restart `dsh web`. New conversations gain `bilibili_search`, `bilibili_video`, `bilibili_subtitles`,

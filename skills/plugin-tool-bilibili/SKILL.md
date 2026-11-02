@@ -5,7 +5,7 @@ description: Use before calling bilibili_search, bilibili_video, bilibili_subtit
 
 # B 站工具套件使用指南（plugin-tool-bilibili）
 
-插件版本：0.2.4（已在 DeepSeek Harness 0.1.7-rc.2 与 0.1.6-alpha.2 上验证）。关联技能：plugin-web-bilibili（宿主提供方与错误码背景）、plugin-tool-github（GitHub 侧对应工具）。
+插件版本：0.3.0（已在 DeepSeek Harness 0.2.0-rc.2 上验证类型与测试面）。关联技能：plugin-web-bilibili（宿主提供方与错误码背景）、plugin-tool-github（GitHub 侧对应工具）。
 
 ## 功能概述
 

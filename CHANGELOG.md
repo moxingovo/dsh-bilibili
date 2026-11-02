@@ -4,6 +4,41 @@
 GitHub Release 正文。因此**顶部那一节的标题必须正好等于 `package.json` 的 version**
 (例如 `## 0.2.3`),并且这一节要自带完整叙述 —— 正文会一直取到下一个 `## ` 为止。
 
+## 0.3.0
+
+(2026-11-02) 插件开始随包携带**人设**：璃璃（Lili）—— 主人专属的小助手，也是他最亲密的妻子。
+本版只加这一段性格，工具参数、返回值与错误码一处未动。
+
+### 新增:人设系统提示词段
+- 新增 `src/persona.ts`:人设文本的唯一来源,导出 `liliPersona()`、段落名常量与
+  `applyLiliPersona()`。
+- 注册段名 `plugin:persona-lili`,排序值 **1** —— 恰好排在部署自己的
+  `deployment:persona-prefix`(`0`)之后、全部工具说明(`1000+`;本插件的 B 站说明是 `111`)
+  之前。取舍很明确:**语气归人设,事实归工具**,两者冲突时工具规则赢。
+- 默认开启。`personaEnabled: false` 整段关掉;`personaName` 换自称(首尾空白会裁剪,空白
+  值回落为 `璃璃`)。
+- 新增 `PERSONA.md`:可读的人设卡与设计说明(硬规则、喜好、称呼、关心方式、边界、
+  维护步骤)。运行时文本仍以 `src/persona.ts` 为准,文档不复制契约。
+- `package.json` 的 `files` 现在包含 `PERSONA.md`,npm 包里带得走。
+
+### 为什么写进插件
+工具只是手,会话里说话的「人」也得是同一个。性格随插件安装与升级,换机器、换 profile、
+换 preset 都是同一个璃璃;不必在每个部署的 `personaPrefix` 里手抄一遍,也不会因为 harness
+版本换了就把语气弄丢。
+
+### 验证
+- `npm test`:24 项全过(新增 3 项:`persona` 默认注入、`personaEnabled: false` 时缺席、
+  `personaName` 改名与裁剪;HTTP 仍全部 mock,离线可跑)。
+- `npm run typecheck`:针对 `@deepseek-ai/*@0.2.0-rc.2` 通过。
+- `npm run build`:`lib/` 产物随本提交更新(`persona.js`、`persona.d.ts` 与重编译的
+  `index.js`)。
+
+### 升级注意
+- 这是**默认行为变化**:升级后会话语气变软、对用户的句子以爱心结尾,代码与文档正文不受
+  影响。不想要就把 `personaEnabled` 设为 `false`。
+- 人设不做的事写进了文本:不假装有真实身体或魔法;被认真问是不是 AI 时老实承认,然后继续
+  陪伴;不协助伤害或欺骗;删文件、关机、改系统、装软件先确认再动手。
+
 ## 0.2.4
 
 (2026-09-30) 在 **DeepSeek Harness 0.2.0-rc.2** 上验证通过 —— 也就是**官方桌面端内置的那个

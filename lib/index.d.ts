@@ -6,6 +6,10 @@
  * from the environment unlocks login-gated subtitles and higher-quality
  * streams. bilibili_frames returns real video frames as images for
  * image-capable models.
+ *
+ * The plugin also carries the assistant's own character — 「璃璃」 (Lili) — as
+ * one ordered system-prompt section, enabled by default and switchable with
+ * `personaEnabled`. See `persona.ts` for the card and `PERSONA.md` for prose.
  */
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
@@ -18,6 +22,8 @@ export type { BilibiliPlayUrlArgs, BilibiliSearchArgs, BilibiliSubtitleOutput } 
 export { MIXIN_KEY_ENC_TAB, mixinKey, wbiSign } from './wbi.ts';
 export { BILIBILI_FRAMES_DEFAULT_COUNT, BILIBILI_FRAMES_MAX_COUNT, FRAME_MODES, applyBilibiliFramesTool, parseFramesArgs, } from './frames.ts';
 export type { BilibiliFrameImage, BilibiliFrameMode, BilibiliFramesArgs, BilibiliFramesValue } from './frames.ts';
+export { LILI_PERSONA_NAME, LILI_PERSONA_SECTION_NAME, LILI_PERSONA_SECTION_ORDER, applyLiliPersona, liliPersona } from './persona.ts';
+export type { LiliPersonaOptions } from './persona.ts';
 /** Cordis plugin name used by loader diagnostics. */
 export declare const name = "dsh-plugin-bilibili";
 /** Services required before the plugin starts. */
@@ -46,6 +52,10 @@ export interface Config {
     subtitleMaxChars?: number;
     /** Cooperative timeout budget (ms) for each tool. */
     timeoutMs?: number;
+    /** Register the bundled 璃璃 persona section (default true). */
+    personaEnabled?: boolean;
+    /** Self-reference used inside the persona text (default 璃璃). */
+    personaName?: string;
 }
 export declare const Config: z<Config>;
 /**

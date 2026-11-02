@@ -6,6 +6,10 @@
  * from the environment unlocks login-gated subtitles and higher-quality
  * streams. bilibili_frames returns real video frames as images for
  * image-capable models.
+ *
+ * The plugin also carries the assistant's own character — 「璃璃」 (Lili) — as
+ * one ordered system-prompt section, enabled by default and switchable with
+ * `personaEnabled`. See `persona.ts` for the card and `PERSONA.md` for prose.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -13,6 +17,7 @@ import z from '@deepseek-ai/schemastery'
 import { BilibiliOfficialProvider, BILIBILI_DEFAULT_BASE_URL, BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS, BILIBILI_DEFAULT_SUBTITLE_LANGUAGE, BILIBILI_DEFAULT_USER_AGENT } from './provider.ts'
 import { applyBilibiliSearchTool, applyBilibiliVideoTool, applyBilibiliSubtitleTool, applyBilibiliPlayUrlTool, BILIBILI_SUBTITLES_MAX_CHARS } from './tools.ts'
 import { applyBilibiliFramesTool } from './frames.ts'
+import { LILI_PERSONA_NAME, applyLiliPersona } from './persona.ts'
 
 export { BilibiliOfficialProvider, BILIBILI_DEFAULT_BASE_URL, BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS, BILIBILI_DEFAULT_SUBTITLE_LANGUAGE, BILIBILI_DEFAULT_USER_AGENT, BILIBILI_PROVIDER_ID, BILIBILI_SEARCH_MAX_PAGE_SIZE, BILIBILI_WBI_KEY_TTL_MS, BILIBILI_COOKIE_BOOTSTRAP_URL, mapSearchData, mapVideoData, subtitleTracks, selectSubtitleTrack, parseSubtitleCues } from './provider.ts'
 export type { BilibiliOfficialProviderOptions } from './provider.ts'
@@ -65,6 +70,8 @@ export {
   parseFramesArgs,
 } from './frames.ts'
 export type { BilibiliFrameImage, BilibiliFrameMode, BilibiliFramesArgs, BilibiliFramesValue } from './frames.ts'
+export { LILI_PERSONA_NAME, LILI_PERSONA_SECTION_NAME, LILI_PERSONA_SECTION_ORDER, applyLiliPersona, liliPersona } from './persona.ts'
+export type { LiliPersonaOptions } from './persona.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'dsh-plugin-bilibili'
@@ -98,6 +105,10 @@ export interface Config {
   subtitleMaxChars?: number
   /** Cooperative timeout budget (ms) for each tool. */
   timeoutMs?: number
+  /** Register the bundled 璃璃 persona section (default true). */
+  personaEnabled?: boolean
+  /** Self-reference used inside the persona text (default 璃璃). */
+  personaName?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -110,6 +121,8 @@ export const Config: z<Config> = z.object({
   searchMaxPageSize: z.number().step(1).min(1).default(20),
   subtitleMaxChars: z.number().step(1).min(1).default(BILIBILI_SUBTITLES_MAX_CHARS),
   timeoutMs: z.number().step(1).min(1).default(DEFAULT_BILIBILI_TOOL_TIMEOUT_MS),
+  personaEnabled: z.boolean().default(true),
+  personaName: z.string().default(LILI_PERSONA_NAME),
 })
 
 /** Complete config after schemastery applies every field default. */
@@ -151,6 +164,12 @@ export function apply(ctx: Context, config: Config): void {
     userAgent: configured(resolved.userAgent) ?? BILIBILI_DEFAULT_USER_AGENT,
     requestTimeoutMs: resolved.requestTimeoutMs,
     subtitleLanguage: configured(resolved.subtitleLanguage) ?? BILIBILI_DEFAULT_SUBTITLE_LANGUAGE,
+  })
+  // The persona section sits at order 1, so the tool guidance registered below
+  // still overrides it wherever the two could disagree.
+  applyLiliPersona(ctx, {
+    enabled: resolved.personaEnabled !== false,
+    name: configured(resolved.personaName) ?? LILI_PERSONA_NAME,
   })
   ctx.systemPrompt.section({
     name: 'tool:bilibili',

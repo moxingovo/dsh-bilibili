@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-bilibili",
-  "version": "0.2.4",
-  "description": "DeepSeek Harness plugin: Bilibili keyword video search, video metadata, subtitle transcripts, direct play URLs, and multimodal frame viewing (bilibili_search / bilibili_video / bilibili_subtitles / bilibili_playurl / bilibili_frames). Anonymous by default with risk-control bootstrapping; an optional SESSDATA unlocks login-gated subtitles and higher-quality streams.",
+  "version": "0.3.0",
+  "description": "DeepSeek Harness plugin: Bilibili keyword video search, video metadata, subtitle transcripts, direct play URLs, and multimodal frame viewing (bilibili_search / bilibili_video / bilibili_subtitles / bilibili_playurl / bilibili_frames), plus the bundled 璃璃 (Lili) persona as a system-prompt section. Anonymous by default with risk-control bootstrapping; an optional SESSDATA unlocks login-gated subtitles and higher-quality streams.",
   "keywords": [
     "deepseek-harness",
     "dsh-plugin",
@@ -22,6 +22,7 @@
     "CHANGELOG.md",
     "README.md",
     "README.zh.md",
+    "PERSONA.md",
     "LICENSE",
     "skills/**/*"
   ],

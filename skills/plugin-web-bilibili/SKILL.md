@@ -5,7 +5,7 @@ description: Use when configuring or diagnosing the Bilibili provider inside dsh
 
 # B 站提供方与故障排查（plugin-web-bilibili）
 
-插件版本：0.2.4（独立插件 dsh-plugin-bilibili，已在 DeepSeek Harness 0.1.7-rc.2 与 0.1.6-alpha.2 上验证）。关联技能：plugin-tool-bilibili（模型侧工具用法，正常使用时先看它）。
+插件版本：0.3.0（独立插件 dsh-plugin-bilibili，已在 DeepSeek Harness 0.2.0-rc.2 上验证类型与测试面）。关联技能：plugin-tool-bilibili（模型侧工具用法，正常使用时先看它）。
 
 ## 功能概述
 

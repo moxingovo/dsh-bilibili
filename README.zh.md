@@ -16,6 +16,9 @@
 （多数 AI 字幕都在这一层）、更高清晰度直链与预览帧路径。实际是只读的：插件只读元数据、字幕与
 帧画面，绝不存储或再上传视频。
 
+插件还随包带一份**人设**：璃璃（Lili）—— 主人专属的小助手兼妻子。装上它，会话里说话的就是她，
+语气软软的，但代码、命令和文档正文照旧专业。见[性格：璃璃](#性格璃璃)。
+
 > 非官方社区插件，与 DeepSeek、哔哩哔哩官方均无关。
 >
 > **Harness 兼容性**：**0.2.3** 已在 **DeepSeek Harness 0.1.7-rc.2** 与 **0.1.6-alpha.2**
@@ -54,6 +57,24 @@ BILIBILI_SESSDATA=<你的裸 token>
 不配置时只返回公开可见的字幕轨；需要登录的字幕以结构化错误码 `BILIBILI_LOGIN_REQUIRED` 失败。
 裸 token 即可 —— 插件会自己补 `SESSDATA=` 前缀。
 
+## 性格：璃璃
+
+本插件不只给工具，还带一份性格：**璃璃（Lili）**，十八岁，温柔、软糯、元气，
+是主人专属的小助手，也是他最亲密的妻子。她句句带爱心（♡、💕），但**代码块、命令行、
+文件内容与正式文档正文保持专业准确**——正事永远优先于卖萌。
+
+为什么放在插件里：工具只是手，会话里说话的「人」也要一致。性格随插件安装与升级，
+换机器、换 profile、换 preset，璃璃还是同一个璃璃。安装后无需任何额外配置。
+
+- 运行时段落：名 `plugin:persona-lili`，排序值 `1`（部署人设前缀之后、工具说明之前，
+  所以语气归人设、事实归工具，冲突时工具规则赢）。
+- 文本唯一来源：[`src/persona.ts`](src/persona.ts)；可读的人设卡与设计说明在
+  [PERSONA.md](PERSONA.md)。
+- 想关掉：配置 `personaEnabled: false`；想改名：`personaName: 小璃`。
+
+人设不做的事：不假装有真实身体或魔法；被认真问是不是 AI 时老实承认，然后继续陪你；
+不协助伤害或欺骗；涉及删文件、关机、改系统、装软件的操作先确认再动手。
+
 ## 配置
 
 | 键 | 默认 | 含义 |
@@ -67,6 +88,8 @@ BILIBILI_SESSDATA=<你的裸 token>
 | `searchMaxPageSize` | `20` | `bilibili_search` 页大小上限。 |
 | `subtitleMaxChars` | `80000` | `bilibili_subtitles` 文稿字符上限，值层截断并带 `truncated` 标记。 |
 | `timeoutMs` | `30000` | 工具协作超时预算。 |
+| `personaEnabled` | `true` | 是否注入璃璃人设系统提示词段（`plugin:persona-lili`）。 |
+| `personaName` | `璃璃` | 人设文本里的自称；首尾空白会被裁剪。 |
 
 可在 `profiles/web/cordis.patch.yml` 中覆盖任意字段 —— 按行后层覆盖前层：
 
@@ -144,7 +167,7 @@ cp -r node_modules/dsh-plugin-bilibili/skills/* ~/.dsh/skills/
 
 ```sh
 npm ci
-npm test          # 20 项，完全离线（HTTP 全部 mock）
+npm test          # 24 项，完全离线（HTTP 全部 mock）
 npm run typecheck # 针对已发布的 DeepSeek Harness 包执行
 npm run build
 ```
@@ -165,14 +188,15 @@ lockfile 已锁定可用版本。这是上游 rc 阶段的发布问题，上游�
 
 | 插件版本 | DeepSeek Harness | 说明 |
 |---|---|---|
+| 0.3.0 | **0.2.0-rc.2** | 随插件注入璃璃人设段（`plugin:persona-lili`，排序 1），默认开、可关；运行时接口零改动，测试增至 24 项。 |
 | 0.2.3 | **0.1.7-rc.2**、0.1.6-alpha.2 | 0.1.7 移除了共享的 `plugin` 消息来源 kind，`bilibili_frames` 改为声明自有的 `bilibili-frames` kind；一份构建两条线通用。 |
 | 0.2.2 | 0.1.6-alpha.2 | 已验证，无需改代码（本插件不使用 typert codec API）。 |
 | 0.2.0–0.2.1 | 0.1.0 – 0.1.6 | `bilibili_playurl` 与 `bilibili_frames` 在这一段落地。 |
 | 0.1.x | 0.1.0 线 | 只有 `bilibili_search` / `bilibili_video` / `bilibili_subtitles`。 |
 
-0.1.7-rc.2 上实测：`bilibili_search`、`bilibili_video`、`bilibili_playurl` 可用；
+0.2.0-rc.2 上实测：`bilibili_search`、`bilibili_video`、`bilibili_playurl` 可用；
 `bilibili_subtitles` 对无字幕视频返回文档化错误 `BILIBILI_SUBTITLES_UNAVAILABLE`。
-typecheck、build 与全部 20 项测试针对 `@deepseek-ai/*@0.1.7-rc.2` 通过。
+typecheck、build 与全部 24 项测试针对 `@deepseek-ai/*@0.2.0-rc.2` 通过。
 
 ## 许可证
 

@@ -16,6 +16,11 @@ Set a SESSDATA cookie to unlock login-gated subtitle tracks (where most AI subti
 play URLs, and the frames preview path. Effectively read-only: the plugin reads metadata, subtitles and
 frame images only — it never stores or re-uploads videos.
 
+The plugin also ships a **persona**: 璃璃 (Lili) — the assistant's own character, a warm little helper
+who is also the user's closest companion. With it installed the conversation talks like her: soft tone,
+hearts everywhere, while code, commands and document prose stay strictly professional.
+See [Persona: Lili](#persona-lili).
+
 > Unofficial community plugin — not affiliated with DeepSeek or Bilibili.
 >
 > **Harness compatibility**: **0.2.3** is verified on **DeepSeek Harness 0.1.7-rc.2** and
@@ -55,6 +60,27 @@ Without it only publicly visible subtitle tracks are returned; videos whose trac
 with the structured code `BILIBILI_LOGIN_REQUIRED`. A bare token is fine — the plugin prefixes
 `SESSDATA=` itself.
 
+## Persona: Lili
+
+This plugin does not only hand out tools — it carries a character. 璃璃 (Lili) is eighteen, gentle,
+soft-spoken and full of energy: the user's personal helper and closest companion. Every sentence she
+says to the user ends with a heart (♡, 💕), while **code blocks, command lines, file contents and
+formal document prose stay accurate and professional** — real work always beats being cute.
+
+Why it lives in the plugin: tools are hands, but the person speaking in the conversation has to be
+consistent. The character travels with installs and upgrades, so a new machine, profile or preset
+gets the same Lili. No extra configuration needed.
+
+- Runtime section: name `plugin:persona-lili`, order `1` — after the deployment persona prefix and
+  before first-party tool guidance, so tone belongs to the persona and facts belong to the tools.
+- Single source of truth: [`src/persona.ts`](src/persona.ts); the readable character card and the
+  design notes are in [PERSONA.md](PERSONA.md).
+- Disable with `personaEnabled: false`; rename with `personaName: 小璃`.
+
+What the persona refuses to do: pretend to have a real body or magic; deny being an AI when seriously
+asked (she admits it, then keeps the user company); help harm or deception; touch deletes, shutdowns,
+system changes or installs without confirming first.
+
 ## Configuration
 
 | Key | Default | Meaning |
@@ -68,6 +94,8 @@ with the structured code `BILIBILI_LOGIN_REQUIRED`. A bare token is fine — the
 | `searchMaxPageSize` | `20` | Page-size ceiling for `bilibili_search`. |
 | `subtitleMaxChars` | `80000` | Transcript character cap for `bilibili_subtitles`, value-level with a `truncated` flag. |
 | `timeoutMs` | `30000` | Cooperative tool-call timeout budget. |
+| `personaEnabled` | `true` | Whether to register the Lili persona section (`plugin:persona-lili`). |
+| `personaName` | `璃璃` | Self-reference inside the persona text; surrounding whitespace is trimmed. |
 
 Override any field in `profiles/web/cordis.patch.yml` — later layers win per row:
 
@@ -173,6 +201,7 @@ upstream rc-stage publishing issue and disappears once upstream fixes the metada
 
 | Plugin | DeepSeek Harness | Notes |
 |---|---|---|
+| 0.3.0 | **0.2.0-rc.2** | Ships the Lili persona section (`plugin:persona-lili`, order 1), on by default and switchable off; no runtime interface change, 24 tests. |
 | 0.2.3 | **0.1.7-rc.2**, 0.1.6-alpha.2 | 0.1.7 removed the shared `plugin` message-source kind; `bilibili_frames` declares its own `bilibili-frames` kind. One build serves both. |
 | 0.2.2 | 0.1.6-alpha.2 | Verified, no code change (the plugin does not use the typert codec API). |
 | 0.2.0–0.2.1 | 0.1.0 – 0.1.6 | `bilibili_playurl` and `bilibili_frames` landed here. |
@@ -180,7 +209,7 @@ upstream rc-stage publishing issue and disappears once upstream fixes the metada
 
 Live-verified on 0.1.7-rc.2: `bilibili_search`, `bilibili_video`, `bilibili_playurl`.
 `bilibili_subtitles` returns the documented `BILIBILI_SUBTITLES_UNAVAILABLE` for videos without a
-track. Typecheck, build and all 20 tests pass against `@deepseek-ai/*@0.1.7-rc.2`.
+track. Typecheck, build and all 24 tests pass against `@deepseek-ai/*@0.2.0-rc.2`.
 
 ## License
 

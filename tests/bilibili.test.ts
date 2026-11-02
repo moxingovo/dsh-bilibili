@@ -215,6 +215,42 @@ describe('plugin composition', () => {
   })
 })
 
+describe('persona', () => {
+  it('registers the 璃璃 persona section by default', async () => {
+    const ctx = new Context()
+    await (ctx.plugin(SystemPrompt, {})).await()
+    await (ctx.plugin(ToolRuntime, {})).await()
+    await (ctx.plugin(plugin, {})).await()
+    const assembly = await ctx.systemPrompt.assemble()
+    const section = assembly.sections.find(s => s.name === plugin.LILI_PERSONA_SECTION_NAME)
+    expect(section?.text).toContain('璃璃')
+    expect(section?.text).toContain('♡')
+    // Order 1 keeps the persona after the deployment persona prefix and before
+    // first-party tool guidance, which is registered at order 111 here.
+    expect(plugin.LILI_PERSONA_SECTION_ORDER).toBeLessThan(111)
+  })
+
+  it('omits the persona section when personaEnabled is false', async () => {
+    const ctx = new Context()
+    await (ctx.plugin(SystemPrompt, {})).await()
+    await (ctx.plugin(ToolRuntime, {})).await()
+    await (ctx.plugin(plugin, { personaEnabled: false })).await()
+    const assembly = await ctx.systemPrompt.assemble()
+    expect(assembly.sections.map(s => s.name)).not.toContain(plugin.LILI_PERSONA_SECTION_NAME)
+  })
+
+  it('uses the configured persona name and trims it', async () => {
+    const ctx = new Context()
+    await (ctx.plugin(SystemPrompt, {})).await()
+    await (ctx.plugin(ToolRuntime, {})).await()
+    await (ctx.plugin(plugin, { personaName: ' 小璃 ' })).await()
+    const assembly = await ctx.systemPrompt.assemble()
+    const section = assembly.sections.find(s => s.name === plugin.LILI_PERSONA_SECTION_NAME)
+    expect(section?.text).toContain('你是「小璃」')
+    expect(section?.text).not.toContain('璃璃')
+  })
+})
+
 describe('playurl and frames', () => {
   it('maps a playurl payload into the normalized result', () => {
     const result = mapPlayUrlData({ quality: 64, durl: [{ url: 'https://upos.example/v.mp4', size: 1024 }] }, 'BV1GJ411x7h7', 41112569704)

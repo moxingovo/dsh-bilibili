@@ -14,3 +14,7 @@
         searchMaxPageSize: 20
         # bilibili_subtitles 转录字符上限（超限截断并标记 truncated）
         subtitleMaxChars: 80000
+        # 璃璃人设：默认注入系统提示词；false 则完全关掉
+        personaEnabled: true
+        # 人设里的自称
+        personaName: 璃璃

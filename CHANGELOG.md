@@ -1,14 +1,15 @@
+# Changelog
+
+本文件是发布正文的唯一来源:CI 按 tag 名(`v<version>`)抓 `## <version>` 这一节作为
+GitHub Release 正文。因此**第一个 `## ` 小节必须正好等于 `package.json` 的 version**
+(例如 `## 0.2.3`),并且这一节要自带完整叙述 —— 正文会一直取到下一个 `## ` 为止；
+这段说明本身不能放在两个版本小节之间,否则会被当作正文一起发出去。
+
 ## 0.3.0
 
 - add bilibili_danmaku: full per-page danmaku via 6-minute protobuf segments (XML list returns only ~600 lines and stays as fallback); offset/limit paging, time range, keyword and mode filters, mode histogram, most-repeated lines.
 - add bilibili_comments: WBI-signed cursor pagination over top-level comments (hot/time), preview replies, and root+page reply listing.
 - nav endpoint tolerates -101 so anonymous WBI signing works.
-
-# Changelog
-
-本文件是发布正文的唯一来源:CI 按 tag 名(`v<version>`)抓 `## <version>` 这一节作为
-GitHub Release 正文。因此**顶部那一节的标题必须正好等于 `package.json` 的 version**
-(例如 `## 0.2.3`),并且这一节要自带完整叙述 —— 正文会一直取到下一个 `## ` 为止。
 
 ## 0.2.4
 

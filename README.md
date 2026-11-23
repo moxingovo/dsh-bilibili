@@ -3,13 +3,15 @@
 [中文](README.zh.md) | **English** · [Changelog](CHANGELOG.md) · [Releases](https://github.com/moxingovo/dsh-bilibili/releases)
 
 A **Bilibili retrieval plugin** for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
-After install the agent gains five tools:
+After install the agent gains seven tools:
 
 - `bilibili_search` — find videos by keyword: title, uploader, play count, duration, publish date.
 - `bilibili_video` — full metadata for one video: counts, partition, multi-part pages, description.
 - `bilibili_subtitles` — the subtitle transcript of one video, merged into plain text.
 - `bilibili_playurl` — the direct mp4 play URL (and granted quality/size) for downloads or frame extraction.
 - `bilibili_frames` — real video frames (preview sprite grid, cover fallback, or ffmpeg extraction) as image blocks, so image-capable models can watch the actual footage instead of relying on subtitles alone.
+- `bilibili_danmaku` — the full bullet-comment stream of one video page: time-ordered lines with a mode histogram and most-repeated lines, paged by offset and filterable by time range, keyword or mode. It reads the player's 6-minute protobuf segments; the XML endpoint (first ~600 lines only) stays as a fallback.
+- `bilibili_comments` — the comment area: cursor-paginated top-level comments (hot/time) with like/reply counts and each comment's rpid, optional preview replies, and `root` + `page` expansion of one comment's reply thread.
 
 Anonymous by default: search bootstraps an anonymous cookie automatically and metadata always works.
 Set a SESSDATA cookie to unlock login-gated subtitle tracks (where most AI subtitles live), higher-quality
@@ -18,7 +20,7 @@ frame images only — it never stores or re-uploads videos.
 
 > Unofficial community plugin — not affiliated with DeepSeek or Bilibili.
 >
-> **Harness compatibility**: **0.2.3** is verified on **DeepSeek Harness 0.1.7-rc.2** and
+> **Harness compatibility**: **0.3.0** is verified on **DeepSeek Harness 0.1.7-rc.2** and
 > **0.1.6-alpha.2** (Typert API Gateway) from one build. The 0.1.0–0.1.5 line works as well —
 > nothing in the plugin uses the 0.1.6+ codec API. Version map in [Compatibility](#compatibility).
 
@@ -32,7 +34,7 @@ dsh plugin --profile web add git+https://github.com/moxingovo/dsh-bilibili
 ```
 
 Restart `dsh web`. New conversations gain `bilibili_search`, `bilibili_video`, `bilibili_subtitles`,
-`bilibili_playurl` and `bilibili_frames`.
+`bilibili_playurl`, `bilibili_frames`, `bilibili_danmaku` and `bilibili_comments`.
 
 Mount it in an agent preset instead when only that preset should see the tools:
 
@@ -100,7 +102,7 @@ Tools fail with structured errors carrying these codes:
 | `BILIBILI_REQUEST_FAILED` | Network failure, including timeouts. |
 | `BILIBILI_WBI_KEYS_UNAVAILABLE` | Signing keys could not be obtained. |
 
-`bilibili_frames` is registered on the plugin's own fiber like the other four tools, so it is
+`bilibili_frames` is registered on the plugin's own fiber like the other six tools, so it is
 **visible everywhere the plugin is mounted** (including a host-domain `bundles` mount). It needs two
 things at **execution time**: an `attachments` service in the calling scope, and a model route that
 declares image input. Either one missing fails that single call with a structured error

@@ -3,7 +3,7 @@
 **简体中文** | [English](README.md) · [更新日志](CHANGELOG.md) · [下载](https://github.com/moxingovo/dsh-bilibili/releases)
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 打造的 **B 站检索插件**。
-安装后 Agent 获得五个工具：
+安装后 Agent 获得七个工具：
 
 - `bilibili_search` —— 按关键词找视频：标题、UP 主、播放量、时长、发布日期。
 - `bilibili_video` —— 单个视频的完整元数据：各项计数、分区、分 P 列表、简介。
@@ -11,6 +11,11 @@
 - `bilibili_playurl` —— 单个视频的 mp4 直链（含实际清晰度与大小），用于下载或抽帧。
 - `bilibili_frames` —— 视频真实画面（预览帧网格、封面回退或 ffmpeg 抽帧）以图片块返回，
   让支持图片输入的模型直接「看」画面，不再只依赖字幕。
+- `bilibili_danmaku` —— 单个分 P 的整段弹幕：按时间排序的条目、模式分布与高频重复统计，
+  支持 offset 翻页与时间区间 / 关键词 / 模式过滤；数据取自播放器 6 分钟 protobuf 分段，
+  XML 列表接口（仅前约 600 条）只作兜底。
+- `bilibili_comments` —— 评论区：按游标翻页的顶层评论（热门/最新，含点赞、回复数与 rpid），
+  可选附带预览回复，并用 `root` + `page` 展开某条评论的楼中楼。
 
 默认匿名可用：搜索自带匿名 cookie 引导，元数据始终可用。配置 SESSDATA 后解锁登录可见字幕轨
 （多数 AI 字幕都在这一层）、更高清晰度直链与预览帧路径。实际是只读的：插件只读元数据、字幕与
@@ -18,7 +23,7 @@
 
 > 非官方社区插件，与 DeepSeek、哔哩哔哩官方均无关。
 >
-> **Harness 兼容性**：**0.2.3** 已在 **DeepSeek Harness 0.1.7-rc.2** 与 **0.1.6-alpha.2**
+> **Harness 兼容性**：**0.3.0** 已在 **DeepSeek Harness 0.1.7-rc.2** 与 **0.1.6-alpha.2**
 > （Typert API Gateway）上验证，同一份构建同时服务两条线；0.1.0–0.1.5 线同样可用 ——
 > 本插件不使用 0.1.6+ 的 codec API。版本对照见[兼容性](#兼容性)。
 
@@ -32,7 +37,7 @@ dsh plugin --profile web add git+https://github.com/moxingovo/dsh-bilibili
 ```
 
 重启 `dsh web`，新会话即获得 `bilibili_search`、`bilibili_video`、`bilibili_subtitles`、
-`bilibili_playurl` 与 `bilibili_frames`。
+`bilibili_playurl`、`bilibili_frames`、`bilibili_danmaku` 与 `bilibili_comments`。
 
 只让某个 preset 看见这些工具时，改为在 preset 里挂载：
 
@@ -98,7 +103,7 @@ BILIBILI_SESSDATA=<你的裸 token>
 | `BILIBILI_REQUEST_FAILED` | 网络失败，含超时。 |
 | `BILIBILI_WBI_KEYS_UNAVAILABLE` | 拿不到签名密钥。 |
 
-`bilibili_frames` 与其余四个工具一样注册在插件自身的 fiber 上，因此**在所有挂载了本插件的
+`bilibili_frames` 与其余六个工具一样注册在插件自身的 fiber 上，因此**在所有挂载了本插件的
 位置都可见**（宿主域的 profile bundles 挂载也算）。它在**执行时**才需要两样东西：当前作用域
 挂载了 `attachments` 服务，且当前模型路由声明了图片输入。任一缺失都会让那一次调用返回结构化
 错误（`no attachment service is mounted in this scope` / `does not declare image input`），

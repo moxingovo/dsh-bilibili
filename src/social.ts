@@ -12,6 +12,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolResult } from '@deepseek-ai/dsh-tools'
+import { resolveBvidInput } from './links.ts'
 import type {
   BilibiliComment,
   BilibiliCommentReply,
@@ -339,7 +340,7 @@ export function applyBilibiliDanmakuTool(ctx: Context, service: BilibiliProvider
     timeoutMs,
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const input = parseDanmakuArgs(args)
+      const input = parseDanmakuArgs({ ...args, bvid: await resolveBvidInput(args.bvid, exec.signal) })
       const result = await service.danmaku({ bvid: input.bvid, ...input.cid === undefined ? {} : { cid: input.cid } }, exec.signal)
       const value = danmakuValue(result.entries, input, result.title)
       return { ...value, cid: result.cid }
@@ -387,7 +388,7 @@ export function applyBilibiliCommentsTool(ctx: Context, service: BilibiliProvide
     timeoutMs,
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const input = parseCommentsArgs(args)
+      const input = parseCommentsArgs({ ...args, bvid: await resolveBvidInput(args.bvid, exec.signal) })
       if (input.root !== undefined) {
         const page = await service.commentReplies({
           bvid: input.bvid,

@@ -8,6 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolResult } from '@deepseek-ai/dsh-tools'
+import { resolveBvidInput } from './links.ts'
 import type {
   BilibiliProviderLike,
   BilibiliSearchOrder,
@@ -313,7 +314,7 @@ export function applyBilibiliVideoTool(ctx: Context, service: BilibiliProviderLi
     // Provider reads do not mutate parent-agent state.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const input = parseVideoArgs(args)
+      const input = parseVideoArgs({ ...args, bvid: await resolveBvidInput(args.bvid, exec.signal) })
       const detail = await service.video(input, exec.signal)
       return { ...detail, pages: [...detail.pages] }
     },
@@ -445,7 +446,7 @@ export function applyBilibiliSubtitleTool(ctx: Context, service: BilibiliProvide
     // Provider reads do not mutate parent-agent state.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const input = parseSubtitleArgs(args)
+      const input = parseSubtitleArgs({ ...args, bvid: await resolveBvidInput(args.bvid, exec.signal) })
       const result = await service.subtitles(input, exec.signal)
       return subtitleOutput(result, maxChars)
     },
@@ -483,7 +484,7 @@ export function applyBilibiliPlayUrlTool(ctx: Context, service: BilibiliProvider
     timeoutMs,
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const input = parsePlayUrlArgs(args)
+      const input = parsePlayUrlArgs({ ...args, bvid: await resolveBvidInput(args.bvid, exec.signal) })
       const result = await service.playurl(input, exec.signal)
       return { url: result.url, quality: result.quality, size: result.size }
     },

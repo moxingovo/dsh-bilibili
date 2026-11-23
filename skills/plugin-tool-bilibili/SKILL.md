@@ -23,6 +23,8 @@ description: Use before calling bilibili_search, bilibili_video, bilibili_subtit
 
 ## 参数详解
 
+bvid 参数统一支持三种写法：BV 号；bilibili.com 视频链接；B 站 App 分享短链（形如【标题】 https://b23.tv/FjGzIzW，含中文标题也可以）。插件会自动把短链展开成 BV。
+
 bilibili_search：
 - keyword：必填，字符串，任意长度，首尾空白会被去除。
 - page：可选，正整数，默认 1，第几页结果。

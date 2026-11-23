@@ -197,7 +197,15 @@ describe('plugin composition', () => {
     // fiber so a host-domain mount reaches agent scopes too. A Cordis child fiber
     // (the old `ctx.inject(['attachments'], …)`) would have kept it invisible
     // there, because a child's registrations reach only that child's descendants.
-    expect(names).toEqual(['bilibili_search', 'bilibili_video', 'bilibili_subtitles', 'bilibili_playurl', 'bilibili_frames'])
+    expect(names).toEqual([
+      'bilibili_search',
+      'bilibili_video',
+      'bilibili_subtitles',
+      'bilibili_playurl',
+      'bilibili_frames',
+      'bilibili_danmaku',
+      'bilibili_comments',
+    ])
     const result = await ctx.tools.execute({ signal: new AbortController().signal, callId: 'c1' as never, name: 'bilibili_search', arguments: { keyword: 'q' } })
     expect(result.isError).toBe(false)
   })

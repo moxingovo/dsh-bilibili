@@ -27,6 +27,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolExecution, ToolResult } from '@deepseek-ai/dsh-tools'
+import { resolveBvidInput } from './links.ts'
 import type { BilibiliProviderLike } from './types.ts'
 
 /**
@@ -281,7 +282,7 @@ export function applyBilibiliFramesTool(ctx: Context, service: BilibiliProviderL
     isConcurrencySafe: () => true,
     timeoutMs,
     async execute(args, exec) {
-      const input = parseFramesArgs(args)
+      const input = parseFramesArgs({ ...args, bvid: await resolveBvidInput(args.bvid, exec.signal) })
       await assertImageCapableRoute(ctx, exec)
       const attachments = ctx.get('attachments') as AttachmentsLike | undefined
       if (attachments === undefined) {

@@ -1,4 +1,4 @@
-# 0.3.0
+## 0.3.0
 
 - add bilibili_danmaku: full per-page danmaku via 6-minute protobuf segments (XML list returns only ~600 lines and stays as fallback); offset/limit paging, time range, keyword and mode filters, mode histogram, most-repeated lines.
 - add bilibili_comments: WBI-signed cursor pagination over top-level comments (hot/time), preview replies, and root+page reply listing.

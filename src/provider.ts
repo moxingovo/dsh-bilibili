@@ -7,6 +7,12 @@
  */
 
 import type {
+  BilibiliComment,
+  BilibiliCommentRepliesResult,
+  BilibiliCommentReply,
+  BilibiliCommentsResult,
+  BilibiliDanmakuEntry,
+  BilibiliDanmakuResult,
   BilibiliPlayUrlResult,
   BilibiliPlayerInfo,
   BilibiliSearchRequest,
@@ -198,11 +204,133 @@ export class BilibiliOfficialProvider {
   }
 
   /**
+   * Fetch every danmaku of one video page.
+   *
+   * The XML list endpoint (`x/v1/dm/list.so`) only returns the first ~600
+   * lines, so the complete stream comes from the player's 6-minute protobuf
+   * segments (`x/v2/dm/web/seg.so`, segment_index 1..N). The XML endpoint is
+   * kept as a fallback when a segment request fails.
+   */
+  async danmaku(request: { readonly bvid: string; readonly cid?: number }, signal?: AbortSignal): Promise<BilibiliDanmakuResult> {
+    const detail = await this.video(request, signal)
+    const cid = request.cid ?? detail.cid
+    const segmentCount = Math.min(Math.max(Math.ceil(detail.duration / 360), 1), 30)
+    const entries: BilibiliDanmakuEntry[] = []
+    let failed = false
+    for (let index = 1; index <= segmentCount; index++) {
+      try {
+        const bytes = await this.fetchBinary('/x/v2/dm/web/seg.so', {
+          type: 1,
+          oid: cid,
+          pid: detail.aid,
+          segment_index: index,
+        }, signal)
+        entries.push(...parseDanmakuSegment(bytes))
+      } catch (error: unknown) {
+        if (signal?.aborted === true) throw error
+        failed = true
+        break
+      }
+    }
+    if (failed || entries.length === 0) {
+      const xml = await this.fetchText('/x/v1/dm/list.so', { oid: cid }, signal)
+      return { bvid: request.bvid, cid, title: detail.title, entries: parseDanmakuXml(xml) }
+    }
+    entries.sort((a, b) => a.time - b.time)
+    return { bvid: request.bvid, cid, title: detail.title, entries }
+  }
+
+  /** Fetch one cursor page of top-level comments (WBI-signed main endpoint). */
+  async comments(
+    request: { readonly bvid?: string; readonly oid?: number; readonly mode?: 'hot' | 'time'; readonly offset?: string },
+    signal?: AbortSignal,
+  ): Promise<BilibiliCommentsResult> {
+    const resolved = await this.resolveAid(request, signal)
+    const pair = await this.resolveWbiKeys(signal)
+    const signed = wbiSign({
+      oid: resolved.aid,
+      type: 1,
+      mode: request.mode === 'time' ? 2 : 3,
+      pagination_str: JSON.stringify({ offset: request.offset ?? '' }),
+      plat: 1,
+      web_location: 1315875,
+    }, pair.imgKey, pair.subKey, this.nowSec())
+    const data = await this.requestJson('/x/v2/reply/wbi/main', signed, signal)
+    return mapCommentsData(data, resolved.bvid, resolved.aid)
+  }
+
+  /** Fetch one page of replies under a root comment. */
+  async commentReplies(
+    request: { readonly bvid?: string; readonly oid?: number; readonly root: string; readonly page?: number; readonly pageSize?: number },
+    signal?: AbortSignal,
+  ): Promise<BilibiliCommentRepliesResult> {
+    const resolved = await this.resolveAid(request, signal)
+    const page = request.page ?? 1
+    const pageSize = request.pageSize ?? 20
+    const data = await this.requestJson('/x/v2/reply/reply', {
+      type: 1,
+      oid: resolved.aid,
+      root: request.root,
+      pn: page,
+      ps: pageSize,
+    }, signal)
+    return mapCommentRepliesData(data, resolved.aid, request.root, page)
+  }
+
+  /** Resolve the numeric aid from either an explicit oid or a bvid. */
+  private async resolveAid(
+    request: { readonly bvid?: string; readonly oid?: number },
+    signal?: AbortSignal,
+  ): Promise<{ bvid: string; aid: number }> {
+    if (request.oid !== undefined) {
+      return { bvid: request.bvid ?? '', aid: request.oid }
+    }
+    const bvid = request.bvid?.trim() ?? ''
+    if (bvid.length === 0) throw new BilibiliError('comments need a bvid or an oid', 'BILIBILI_BAD_REQUEST')
+    const detail = await this.video({ bvid }, signal)
+    return { bvid, aid: detail.aid }
+  }
+
+  /** Fetch one text body (danmaku XML) from the API host, preserving cookies. */
+  private async fetchText(path: string, params: Readonly<Record<string, string | number>>, signal?: AbortSignal): Promise<string> {
+    const url = new URL(path, this.options.baseUrl ?? BILIBILI_DEFAULT_BASE_URL)
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value))
+    const cookie = this.cookieHeader(this.options.cookie)
+    const headers: Record<string, string> = {
+      accept: 'text/xml,application/xml,*/*',
+      'user-agent': this.options.userAgent ?? BILIBILI_DEFAULT_USER_AGENT,
+    }
+    if (cookie !== undefined) headers.cookie = cookie
+    const timeoutMs = this.options.requestTimeoutMs ?? BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS
+    const signals: AbortSignal[] = []
+    if (signal !== undefined) signals.push(signal)
+    signals.push(AbortSignal.timeout(timeoutMs))
+    let response: Response
+    try {
+      response = await fetch(url, { signal: AbortSignal.any(signals), redirect: 'manual', headers })
+    } catch (cause: unknown) {
+      if (signal?.aborted === true) throw cause
+      throw new BilibiliError('bilibili request failed: ' + String(cause), 'BILIBILI_REQUEST_FAILED', { cause })
+    }
+    this.captureCookies(response)
+    if (response.status >= 300 && response.status < 400) {
+      throw new BilibiliError('bilibili refused a redirect (HTTP ' + String(response.status) + ') from ' + url.host, 'BILIBILI_REDIRECT_REFUSED')
+    }
+    if (!response.ok) throw new BilibiliError('bilibili returned HTTP ' + String(response.status), 'BILIBILI_REQUEST_FAILED')
+    return await response.text()
+  }
+
+  /**
    * One GET against the API host, returning the envelope data on code 0.
    * Refuses any redirect (credential-bearing requests must never follow one)
    * and rejects non-JSON bodies and non-zero business codes.
    */
-  private async requestJson(path: string, params: Readonly<Record<string, string | number>>, signal?: AbortSignal): Promise<unknown> {
+  private async requestJson(
+    path: string,
+    params: Readonly<Record<string, string | number>>,
+    signal?: AbortSignal,
+    allowBusinessError = false,
+  ): Promise<unknown> {
     const url = new URL(path, this.options.baseUrl ?? BILIBILI_DEFAULT_BASE_URL)
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value))
     const cookie = this.cookieHeader(this.options.cookie)
@@ -233,8 +361,39 @@ export class BilibiliOfficialProvider {
       throw new BilibiliError('bilibili response was not JSON (HTTP ' + String(response.status) + ')', 'BILIBILI_BAD_RESPONSE', { cause })
     }
     const envelope = narrowEnvelope(body)
-    if (envelope.code !== 0) throw businessError(envelope)
+    // nav 在未登录时返回 -101, 但 data.wbi_img 仍然可用 —— WBI 签名必需的密钥
+    // 就在这里, 所以 nav 必须容忍业务错误码。
+    if (envelope.code !== 0 && !allowBusinessError) throw businessError(envelope)
     return envelope.data
+  }
+
+  /** Fetch one binary body (danmaku protobuf) from the API host. */
+  private async fetchBinary(path: string, params: Readonly<Record<string, string | number>>, signal?: AbortSignal): Promise<Uint8Array> {
+    const url = new URL(path, this.options.baseUrl ?? BILIBILI_DEFAULT_BASE_URL)
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value))
+    const cookie = this.cookieHeader(this.options.cookie)
+    const headers: Record<string, string> = {
+      accept: '*/*',
+      'user-agent': this.options.userAgent ?? BILIBILI_DEFAULT_USER_AGENT,
+    }
+    if (cookie !== undefined) headers.cookie = cookie
+    const timeoutMs = this.options.requestTimeoutMs ?? BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS
+    const signals: AbortSignal[] = []
+    if (signal !== undefined) signals.push(signal)
+    signals.push(AbortSignal.timeout(timeoutMs))
+    let response: Response
+    try {
+      response = await fetch(url, { signal: AbortSignal.any(signals), redirect: 'manual', headers })
+    } catch (cause: unknown) {
+      if (signal?.aborted === true) throw cause
+      throw new BilibiliError('bilibili request failed: ' + String(cause), 'BILIBILI_REQUEST_FAILED', { cause })
+    }
+    this.captureCookies(response)
+    if (response.status >= 300 && response.status < 400) {
+      throw new BilibiliError('bilibili refused a redirect (HTTP ' + String(response.status) + ') from ' + url.host, 'BILIBILI_REDIRECT_REFUSED')
+    }
+    if (!response.ok) throw new BilibiliError('bilibili returned HTTP ' + String(response.status), 'BILIBILI_REQUEST_FAILED')
+    return new Uint8Array(await response.arrayBuffer())
   }
 
   /** Resolve the WBI key pair, reusing a fresh cached pair. */
@@ -242,7 +401,7 @@ export class BilibiliOfficialProvider {
     const cached = this.wbiKeyPair
     const now = this.now()
     if (cached !== undefined && now - cached.fetchedAt < BILIBILI_WBI_KEY_TTL_MS) return cached
-    const data = await this.requestJson('/x/web-interface/nav', {}, signal)
+    const data = await this.requestJson('/x/web-interface/nav', {}, signal, true)
     const pair = wbiKeysFromData(data, this.now())
     this.wbiKeyPair = pair
     return pair
@@ -617,3 +776,232 @@ function urlOf(value: unknown): string {
 function videoUrl(bvid: string): string {
   return 'https://www.bilibili.com/video/' + bvid
 }
+
+/** Decode the minimal XML entities bilibili emits inside danmaku text. */
+export function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&amp;/g, '&')
+}
+
+/**
+ * Parse the danmaku XML list into time-ordered entries.
+ * A row is `<d p="time,mode,size,color,ts,pool,sender,rowid">text</d>`.
+ * Malformed rows are dropped; the endpoint carries no envelope.
+ * @param xml - the raw XML body.
+ * @returns entries ordered by time ascending.
+ */
+export function parseDanmakuXml(xml: string): BilibiliDanmakuEntry[] {
+  const entries: BilibiliDanmakuEntry[] = []
+  const rowPattern = /<d\s+p="([^"]*)"[^>]*>([\s\S]*?)<\/d>/g
+  for (const match of xml.matchAll(rowPattern)) {
+    const fields = (match[1] ?? '').split(',')
+    const time = Number(fields[0])
+    if (!Number.isFinite(time) || time < 0) continue
+    const text = decodeXmlEntities(match[2] ?? '').trim()
+    if (text.length === 0) continue
+    const mode = Number(fields[1])
+    const color = Number(fields[3])
+    entries.push({
+      time,
+      mode: Number.isFinite(mode) ? mode : 1,
+      color: Number.isFinite(color) ? color : 0xffffff,
+      sender: fields[6] ?? '',
+      text,
+    })
+  }
+  entries.sort((a, b) => a.time - b.time)
+  return entries
+}
+
+/** A mutable byte cursor for the minimal protobuf reader below. */
+interface ByteCursor {
+  position: number
+}
+
+/** Read one base-128 varint; protobuf lengths/values never exceed 2^53 here. */
+function readVarint(bytes: Uint8Array, cursor: ByteCursor): number {
+  let shift = 0
+  let value = 0
+  while (cursor.position < bytes.length) {
+    const byte = bytes[cursor.position++] ?? 0
+    value += (byte & 0x7f) * Math.pow(2, shift)
+    if ((byte & 0x80) === 0) return value
+    shift += 7
+    // int64 fields (danmaku id) need up to 10 bytes; values beyond 2^53 lose
+    // precision, but those fields are only skipped, never used as numbers.
+    if (shift > 63) break
+  }
+  throw new BilibiliError('danmaku protobuf varint is truncated', 'BILIBILI_BAD_RESPONSE')
+}
+
+/** Skip one protobuf field of an unknown/irrelevant tag. */
+function skipField(bytes: Uint8Array, cursor: ByteCursor, wireType: number): void {
+  if (wireType === 0) {
+    readVarint(bytes, cursor)
+  } else if (wireType === 1) {
+    cursor.position += 8
+  } else if (wireType === 2) {
+    cursor.position += readVarint(bytes, cursor)
+  } else if (wireType === 5) {
+    cursor.position += 4
+  } else {
+    // 旧式 group 标记(3/4)不应出现; 真遇到时跳一个字节继续, 让整段仍可用。
+    cursor.position += 1
+  }
+  if (cursor.position > bytes.length) {
+    throw new BilibiliError('danmaku protobuf is truncated', 'BILIBILI_BAD_RESPONSE')
+  }
+}
+
+/**
+ * Parse one 6-minute danmaku segment protobuf (`DmSegMobileReply`).
+ *
+ * Only the fields the tool needs are decoded: DanmakuElem.progress (2),
+ * mode (3), color (5), midHash (6), content (7). Unknown fields are skipped,
+ * so a newer server-side schema does not break parsing.
+ * @param bytes - the raw segment body.
+ * @returns parsed entries (rows without content are dropped).
+ */
+export function parseDanmakuSegment(bytes: Uint8Array): BilibiliDanmakuEntry[] {
+  const decoder = new TextDecoder()
+  const entries: BilibiliDanmakuEntry[] = []
+  const cursor: ByteCursor = { position: 0 }
+  try {
+  while (cursor.position < bytes.length) {
+    const key = readVarint(bytes, cursor)
+    const field = Math.floor(key / 8)
+    const wireType = key % 8
+    if (field !== 1 || wireType !== 2) {
+      skipField(bytes, cursor, wireType)
+      continue
+    }
+    const length = readVarint(bytes, cursor)
+    const end = cursor.position + length
+    if (end > bytes.length) throw new BilibiliError('danmaku protobuf element is truncated', 'BILIBILI_BAD_RESPONSE')
+    const elemBytes = bytes.subarray(cursor.position, end)
+    cursor.position = end
+    // 个别元素会带服务端新增字段; 单条解析失败不应丢掉整段。
+    const elemCursor: ByteCursor = { position: 0 }
+    try {
+    let progress = -1
+    let mode = 1
+    let color = 0xffffff
+    let sender = ''
+    let text = ''
+    while (elemCursor.position < elemBytes.length) {
+      const elemKey = readVarint(elemBytes, elemCursor)
+      const elemField = Math.floor(elemKey / 8)
+      const elemWire = elemKey % 8
+      if (elemWire === 0) {
+        const value = readVarint(elemBytes, elemCursor)
+        if (elemField === 2) progress = value
+        else if (elemField === 3) mode = value
+        else if (elemField === 5) color = value
+      } else if (elemWire === 2) {
+        const elementLength = readVarint(elemBytes, elemCursor)
+        const start = elemCursor.position
+        elemCursor.position = start + elementLength
+        if (elemField === 6) sender = decoder.decode(elemBytes.subarray(start, elemCursor.position))
+        else if (elemField === 7) text = decoder.decode(elemBytes.subarray(start, elemCursor.position))
+      } else {
+        skipField(elemBytes, elemCursor, elemWire)
+      }
+    }
+    if (progress < 0 || text.length === 0) continue
+    entries.push({ time: progress / 1000, mode, color, sender, text })
+    } catch {
+      continue
+    }
+  }
+  } catch {
+    // 段尾/新字段导致的整体失步: 保留已解析出的条目。
+  }
+  return entries
+}
+
+/** Map one reply row into the narrow reply shape. */
+export function mapCommentReply(row: Record<string, unknown>): BilibiliCommentReply {
+  const member = asRecord(row.member)
+  const content = asRecord(row.content)
+  return {
+    rpid: nonEmptyString(row.rpid_str) ?? String(finiteNumber(row.rpid, 0)),
+    author: nonEmptyString(member.uname) ?? '',
+    content: nonEmptyString(content.message) ?? '',
+    like: finiteNumber(row.like, 0),
+    createdAt: finiteNumber(row.ctime, 0),
+  }
+}
+
+/** Map one top-level reply row into the comment shape. */
+export function mapComment(row: Record<string, unknown>): BilibiliComment {
+  const member = asRecord(row.member)
+  const content = asRecord(row.content)
+  return {
+    rpid: nonEmptyString(row.rpid_str) ?? String(finiteNumber(row.rpid, 0)),
+    author: nonEmptyString(member.uname) ?? '',
+    authorMid: finiteNumber(member.mid, 0),
+    content: nonEmptyString(content.message) ?? '',
+    like: finiteNumber(row.like, 0),
+    replyCount: finiteNumber(row.rcount, 0),
+    createdAt: finiteNumber(row.ctime, 0),
+    replies: asRecordArray(row.replies).map(mapCommentReply),
+  }
+}
+
+/**
+ * Map the WBI main endpoint payload into one cursor page.
+ * @param data - the envelope data payload.
+ * @param bvid - the requested bvid (empty when the caller passed an oid).
+ * @param aid - the numeric oid used.
+ * @returns the normalized page.
+ */
+export function mapCommentsData(data: unknown, bvid: string, aid: number): BilibiliCommentsResult {
+  const record = asRecord(data)
+  const cursor = asRecord(record.cursor)
+  const legacyPage = asRecord(record.page)
+  const total = finiteNumber(cursor.all_count, finiteNumber(legacyPage.acount, 0))
+  const nextOffset = nonEmptyString(asRecord(cursor.pagination_reply).next_offset)
+  const items = asRecordArray(record.replies).map(mapComment)
+  // 热门排序有时会在末页之后再多给一个空页(next_offset 仍存在); 空页即视为结束。
+  const exhausted = items.length === 0
+  const isEnd = cursor.is_end === true || nextOffset === undefined || exhausted
+  return {
+    bvid,
+    aid,
+    total,
+    items,
+    ...nextOffset === undefined || exhausted ? {} : { nextOffset },
+    isEnd,
+  }
+}
+
+/**
+ * Map the reply/reply endpoint payload into one reply page.
+ * @param data - the envelope data payload.
+ * @param aid - the numeric oid used.
+ * @param root - the root comment rpid.
+ * @param page - the requested page number.
+ * @returns the normalized reply page.
+ */
+export function mapCommentRepliesData(data: unknown, aid: number, root: string, page: number): BilibiliCommentRepliesResult {
+  const record = asRecord(data)
+  const pageInfo = asRecord(record.page)
+  const items = asRecordArray(record.replies).map(mapCommentReply)
+  const total = finiteNumber(pageInfo.count, items.length)
+  const size = finiteNumber(pageInfo.size, items.length)
+  const num = finiteNumber(pageInfo.num, page)
+  return {
+    aid,
+    root,
+    total,
+    items,
+    page,
+    hasMore: size > 0 && num * size < total,
+  }
+}
+

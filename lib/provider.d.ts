@@ -5,7 +5,7 @@
  * login-gated subtitles. Every request refuses redirects, and the cookie is
  * only ever sent to the configured API host - never to subtitle CDN hosts.
  */
-import type { BilibiliPlayUrlResult, BilibiliPlayerInfo, BilibiliSearchRequest, BilibiliSearchResult, BilibiliSubtitleCue, BilibiliSubtitleTrack, BilibiliSubtitlesResult, BilibiliVideoDetail } from './types.ts';
+import type { BilibiliComment, BilibiliCommentRepliesResult, BilibiliCommentReply, BilibiliCommentsResult, BilibiliDanmakuEntry, BilibiliDanmakuResult, BilibiliPlayUrlResult, BilibiliPlayerInfo, BilibiliSearchRequest, BilibiliSearchResult, BilibiliSubtitleCue, BilibiliSubtitleTrack, BilibiliSubtitlesResult, BilibiliVideoDetail } from './types.ts';
 /** Provider registry id for the official API implementation. */
 export declare const BILIBILI_PROVIDER_ID = "bilibili-official";
 /** Default API base URL. */
@@ -79,11 +79,44 @@ export declare class BilibiliOfficialProvider {
         readonly language?: string;
     }, signal?: AbortSignal): Promise<BilibiliSubtitlesResult>;
     /**
+     * Fetch every danmaku of one video page.
+     *
+     * The XML list endpoint (`x/v1/dm/list.so`) only returns the first ~600
+     * lines, so the complete stream comes from the player's 6-minute protobuf
+     * segments (`x/v2/dm/web/seg.so`, segment_index 1..N). The XML endpoint is
+     * kept as a fallback when a segment request fails.
+     */
+    danmaku(request: {
+        readonly bvid: string;
+        readonly cid?: number;
+    }, signal?: AbortSignal): Promise<BilibiliDanmakuResult>;
+    /** Fetch one cursor page of top-level comments (WBI-signed main endpoint). */
+    comments(request: {
+        readonly bvid?: string;
+        readonly oid?: number;
+        readonly mode?: 'hot' | 'time';
+        readonly offset?: string;
+    }, signal?: AbortSignal): Promise<BilibiliCommentsResult>;
+    /** Fetch one page of replies under a root comment. */
+    commentReplies(request: {
+        readonly bvid?: string;
+        readonly oid?: number;
+        readonly root: string;
+        readonly page?: number;
+        readonly pageSize?: number;
+    }, signal?: AbortSignal): Promise<BilibiliCommentRepliesResult>;
+    /** Resolve the numeric aid from either an explicit oid or a bvid. */
+    private resolveAid;
+    /** Fetch one text body (danmaku XML) from the API host, preserving cookies. */
+    private fetchText;
+    /**
      * One GET against the API host, returning the envelope data on code 0.
      * Refuses any redirect (credential-bearing requests must never follow one)
      * and rejects non-JSON bodies and non-zero business codes.
      */
     private requestJson;
+    /** Fetch one binary body (danmaku protobuf) from the API host. */
+    private fetchBinary;
     /** Resolve the WBI key pair, reusing a fresh cached pair. */
     private resolveWbiKeys;
     /**
@@ -155,3 +188,44 @@ export declare function selectSubtitleTrack(tracks: readonly BilibiliSubtitleTra
  * @throws BilibiliError BILIBILI_SUBTITLES_UNAVAILABLE for a body without cues.
  */
 export declare function parseSubtitleCues(body: unknown): readonly BilibiliSubtitleCue[];
+/** Decode the minimal XML entities bilibili emits inside danmaku text. */
+export declare function decodeXmlEntities(value: string): string;
+/**
+ * Parse the danmaku XML list into time-ordered entries.
+ * A row is `<d p="time,mode,size,color,ts,pool,sender,rowid">text</d>`.
+ * Malformed rows are dropped; the endpoint carries no envelope.
+ * @param xml - the raw XML body.
+ * @returns entries ordered by time ascending.
+ */
+export declare function parseDanmakuXml(xml: string): BilibiliDanmakuEntry[];
+/**
+ * Parse one 6-minute danmaku segment protobuf (`DmSegMobileReply`).
+ *
+ * Only the fields the tool needs are decoded: DanmakuElem.progress (2),
+ * mode (3), color (5), midHash (6), content (7). Unknown fields are skipped,
+ * so a newer server-side schema does not break parsing.
+ * @param bytes - the raw segment body.
+ * @returns parsed entries (rows without content are dropped).
+ */
+export declare function parseDanmakuSegment(bytes: Uint8Array): BilibiliDanmakuEntry[];
+/** Map one reply row into the narrow reply shape. */
+export declare function mapCommentReply(row: Record<string, unknown>): BilibiliCommentReply;
+/** Map one top-level reply row into the comment shape. */
+export declare function mapComment(row: Record<string, unknown>): BilibiliComment;
+/**
+ * Map the WBI main endpoint payload into one cursor page.
+ * @param data - the envelope data payload.
+ * @param bvid - the requested bvid (empty when the caller passed an oid).
+ * @param aid - the numeric oid used.
+ * @returns the normalized page.
+ */
+export declare function mapCommentsData(data: unknown, bvid: string, aid: number): BilibiliCommentsResult;
+/**
+ * Map the reply/reply endpoint payload into one reply page.
+ * @param data - the envelope data payload.
+ * @param aid - the numeric oid used.
+ * @param root - the root comment rpid.
+ * @param page - the requested page number.
+ * @returns the normalized reply page.
+ */
+export declare function mapCommentRepliesData(data: unknown, aid: number, root: string, page: number): BilibiliCommentRepliesResult;

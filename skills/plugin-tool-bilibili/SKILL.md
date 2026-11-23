@@ -1,20 +1,20 @@
 ---
 name: plugin-tool-bilibili
-description: Use before calling bilibili_search, bilibili_video, bilibili_subtitles, bilibili_playurl, or bilibili_frames — find Bilibili videos, read metadata and subtitles, fetch direct play URLs, and view real video frames; covers argument formats, error codes, and fallbacks.
+description: Use before calling bilibili_search, bilibili_video, bilibili_subtitles, bilibili_playurl, bilibili_frames, bilibili_danmaku, or bilibili_comments — find Bilibili videos, read metadata/subtitles/danmaku/comments, fetch direct play URLs, and view real video frames (preview sprite or ffmpeg extraction); covers argument formats, pagination, error codes, and fallbacks.
 ---
 
 # B 站工具套件使用指南（plugin-tool-bilibili）
 
-插件版本：0.2.4（已在 DeepSeek Harness 0.1.7-rc.2 与 0.1.6-alpha.2 上验证）。关联技能：plugin-web-bilibili（宿主提供方与错误码背景）、plugin-tool-github（GitHub 侧对应工具）。
+插件版本：0.3.0（新增 bilibili_danmaku / bilibili_comments；已在 DeepSeek Harness 0.1.7-rc.2 与 0.1.6-alpha.2 上验证）。关联技能：plugin-web-bilibili（宿主提供方与错误码背景）、plugin-tool-github（GitHub 侧对应工具）。
 
 ## 功能概述
 
-本插件提供五个工具：bilibili_search 按关键词搜 B 站视频；bilibili_video 读单个视频的完整元数据；bilibili_subtitles 下载并合并视频的字幕文稿；bilibili_playurl 取视频 mp4 直链；bilibili_frames 返回视频真实画面（预览帧/封面）给识图模型直接"看"。不能做：读弹幕、发评论、登录态操作。
+本插件提供七个工具：bilibili_search 按关键词搜 B 站视频；bilibili_video 读单个视频的完整元数据；bilibili_subtitles 下载并合并视频的字幕文稿；bilibili_playurl 取视频 mp4 直链；bilibili_frames 返回视频真实画面给识图模型直接"看"（auto=预览帧拼图，extract=下载视频后 ffmpeg 抽帧，画质上限更高）；bilibili_danmaku 读整段弹幕（分页/按时间/关键词/模式过滤）；bilibili_comments 读评论区（游标分页，支持展开楼中楼）。不能做：发弹幕、发评论、登录态操作。
 
 ## 适用场景
 
 该用：用户要找 B 站视频、查某视频的 UP 主/播放量/简介/分 P、需要「某视频讲了什么」的字幕全文、或视频没有字幕而你想亲眼看画面（bilibili_frames，仅限支持图片输入的模型）。
-不该用：通用网页搜索请用 web_search；评论互动。
+不该用：通用网页搜索请用 web_search；发评论/发弹幕等写操作。
 易误用：把 URL 当 keyword 传入；bvid 格式写错；对无字幕视频反复尝试 subtitles；非识图模型调用 bilibili_frames。
 
 ## 调用时机
@@ -76,3 +76,19 @@ bilibili_frames：
 - 字幕拿不到：改用 bilibili_video 读标题与简介，引用视频 url 给用户，并说明「该视频没有可提取的字幕」；不要编造内容。
 - 搜索无结果：换更短的关键词，或改用 web_search 搜索站点信息。
 - 所有错误都带机器可读 code，按上面表格分类处理，不要把错误文本原样复述给用户。
+## bilibili_danmaku（0.3.0 新增）
+
+参数：bvid（必填）；cid（分 P）；offset（0 起，默认 0）；limit（1-3000，默认 500）；timeFrom/timeTo（秒）；keyword；mode（1 滚动 / 4 底部 / 5 顶部）。
+返回：total（该 P 全部弹幕数）、matched、offset、limit、hasMore、truncated、text。text 头部为模式分布与高频重复弹幕，正文是 [mm:ss] (top) 内容 行；超过 60000 字符截断并标 truncated。
+要点：数据来自播放器 6 分钟分段接口（protobuf），XML 列表接口只有前 600 条、仅作兜底。要「看全部」按 hasMore 递增 offset，或先用 timeFrom/timeTo 收窄。
+
+## bilibili_comments（0.3.0 新增）
+
+参数：bvid（必填）；mode（hot 默认 / time）；offset（游标，用上一页 nextOffset）；root（评论 rpid，切到楼中楼）；page（楼中楼页码）；includeReplies（附预览回复）；repliesLimit（0-20，默认 3）。
+返回：kind、total、shown、isEnd、nextOffset、truncated、text。
+要点：总评论数可能几十万，必须按 isEnd/nextOffset 翻页；每条以「#序号 作者 (♥赞, 时间, replies N, rpid XXX)」开头，把 rpid 传给 root 即可展开该条的楼中楼（配合 page 翻页）；空页视为结束。
+
+## bilibili_frames 的两种画质
+
+auto：预览拼图/封面，秒回不下载，分辨率由 B 站决定（约 480×270，竖屏裁切后 180×270）。
+extract：下载直链后调用系统 ffmpeg 抽帧，默认 8 帧（1-12），输出宽 ≤512 的 PNG，能看清小字；需要宿主 PATH 有 ffmpeg，缺失时返回明确错误。

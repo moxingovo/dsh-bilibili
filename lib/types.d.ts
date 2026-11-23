@@ -164,6 +164,92 @@ export interface BilibiliPlayerInfo {
     /** Preview sprite URL (a grid of sampled frames); absent when none is exposed. */
     readonly previewPic?: string;
 }
+/** One parsed danmaku line (the XML list endpoint row). */
+export interface BilibiliDanmakuEntry {
+    /** Time offset in seconds from the video start. */
+    readonly time: number;
+    /** Danmaku mode: 1 scroll, 4 bottom, 5 top. */
+    readonly mode: number;
+    /** Decimal RGB color. */
+    readonly color: number;
+    /** Hashed sender id (never the numeric uid). */
+    readonly sender: string;
+    /** The danmaku text. */
+    readonly text: string;
+}
+/** All danmaku of one video page, ordered by time. */
+export interface BilibiliDanmakuResult {
+    /** Video BV id. */
+    readonly bvid: string;
+    /** The cid the danmaku belong to. */
+    readonly cid: number;
+    /** Video title (for the response envelope). */
+    readonly title: string;
+    /** Parsed entries, ordered by time ascending. */
+    readonly entries: readonly BilibiliDanmakuEntry[];
+}
+/** One reply preview attached to a top-level comment. */
+export interface BilibiliCommentReply {
+    /** Reply rpid. */
+    readonly rpid: string;
+    /** Author display name. */
+    readonly author: string;
+    /** Plain-text body. */
+    readonly content: string;
+    /** Like count. */
+    readonly like: number;
+    /** Epoch seconds. */
+    readonly createdAt: number;
+}
+/** One top-level comment. */
+export interface BilibiliComment {
+    /** Comment rpid. */
+    readonly rpid: string;
+    /** Author display name. */
+    readonly author: string;
+    /** Author mid. */
+    readonly authorMid: number;
+    /** Plain-text body. */
+    readonly content: string;
+    /** Like count. */
+    readonly like: number;
+    /** Total replies under this comment. */
+    readonly replyCount: number;
+    /** Epoch seconds. */
+    readonly createdAt: number;
+    /** Preview replies carried by the list endpoint. */
+    readonly replies: readonly BilibiliCommentReply[];
+}
+/** One comments page (cursor paginated). */
+export interface BilibiliCommentsResult {
+    /** Video BV id. */
+    readonly bvid: string;
+    /** Numeric aid used as oid. */
+    readonly aid: number;
+    /** Total top-level comments the API reports. */
+    readonly total: number;
+    /** This page's comments. */
+    readonly items: readonly BilibiliComment[];
+    /** Cursor for the next page; absent at the end. */
+    readonly nextOffset?: string;
+    /** True when this is the last page. */
+    readonly isEnd: boolean;
+}
+/** One page of replies under a top-level comment. */
+export interface BilibiliCommentRepliesResult {
+    /** Numeric aid used as oid. */
+    readonly aid: number;
+    /** The root comment rpid. */
+    readonly root: string;
+    /** Total replies under the root comment. */
+    readonly total: number;
+    /** This page's replies. */
+    readonly items: readonly BilibiliCommentReply[];
+    /** 1-based page number. */
+    readonly page: number;
+    /** True when more reply pages follow. */
+    readonly hasMore: boolean;
+}
 /**
  * The provider surface the tools execute against (the plugin own provider
  * implements it; kept narrow so consumers see one contract).
@@ -186,6 +272,23 @@ export interface BilibiliProviderLike {
         readonly cid: number;
     }, signal?: AbortSignal): Promise<BilibiliPlayerInfo>;
     fetchBytes(url: string, signal?: AbortSignal): Promise<Uint8Array>;
+    danmaku(request: {
+        readonly bvid: string;
+        readonly cid?: number;
+    }, signal?: AbortSignal): Promise<BilibiliDanmakuResult>;
+    comments(request: {
+        readonly bvid?: string;
+        readonly oid?: number;
+        readonly mode?: 'hot' | 'time';
+        readonly offset?: string;
+    }, signal?: AbortSignal): Promise<BilibiliCommentsResult>;
+    commentReplies(request: {
+        readonly bvid?: string;
+        readonly oid?: number;
+        readonly root: string;
+        readonly page?: number;
+        readonly pageSize?: number;
+    }, signal?: AbortSignal): Promise<BilibiliCommentRepliesResult>;
 }
 /**
  * Typed Bilibili error with a machine-routable, open-string code and

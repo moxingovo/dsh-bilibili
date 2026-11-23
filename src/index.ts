@@ -13,11 +13,18 @@ import z from '@deepseek-ai/schemastery'
 import { BilibiliOfficialProvider, BILIBILI_DEFAULT_BASE_URL, BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS, BILIBILI_DEFAULT_SUBTITLE_LANGUAGE, BILIBILI_DEFAULT_USER_AGENT } from './provider.ts'
 import { applyBilibiliSearchTool, applyBilibiliVideoTool, applyBilibiliSubtitleTool, applyBilibiliPlayUrlTool, BILIBILI_SUBTITLES_MAX_CHARS } from './tools.ts'
 import { applyBilibiliFramesTool } from './frames.ts'
+import { applyBilibiliDanmakuTool, applyBilibiliCommentsTool, BILIBILI_DANMAKU_MAX_CHARS, BILIBILI_COMMENTS_MAX_CHARS } from './social.ts'
 
 export { BilibiliOfficialProvider, BILIBILI_DEFAULT_BASE_URL, BILIBILI_DEFAULT_REQUEST_TIMEOUT_MS, BILIBILI_DEFAULT_SUBTITLE_LANGUAGE, BILIBILI_DEFAULT_USER_AGENT, BILIBILI_PROVIDER_ID, BILIBILI_SEARCH_MAX_PAGE_SIZE, BILIBILI_WBI_KEY_TTL_MS, BILIBILI_COOKIE_BOOTSTRAP_URL, mapSearchData, mapVideoData, subtitleTracks, selectSubtitleTrack, parseSubtitleCues } from './provider.ts'
 export type { BilibiliOfficialProviderOptions } from './provider.ts'
 export { BilibiliError } from './types.ts'
 export type {
+  BilibiliComment,
+  BilibiliCommentRepliesResult,
+  BilibiliCommentReply,
+  BilibiliCommentsResult,
+  BilibiliDanmakuEntry,
+  BilibiliDanmakuResult,
   BilibiliProviderLike,
   BilibiliSearchOrder,
   BilibiliSearchRequest,
@@ -65,6 +72,21 @@ export {
   parseFramesArgs,
 } from './frames.ts'
 export type { BilibiliFrameImage, BilibiliFrameMode, BilibiliFramesArgs, BilibiliFramesValue } from './frames.ts'
+export {
+  BILIBILI_COMMENTS_MAX_CHARS,
+  BILIBILI_DANMAKU_DEFAULT_LIMIT,
+  BILIBILI_DANMAKU_MAX_CHARS,
+  BILIBILI_DANMAKU_MAX_LIMIT,
+  DANMAKU_MODES,
+  applyBilibiliCommentsTool,
+  applyBilibiliDanmakuTool,
+  commentsValue,
+  danmakuValue,
+  parseCommentsArgs,
+  parseDanmakuArgs,
+} from './social.ts'
+export type { BilibiliCommentsArgs, BilibiliDanmakuArgs, BilibiliDanmakuValue } from './social.ts'
+export { decodeXmlEntities, mapComment, mapCommentRepliesData, mapCommentReply, mapCommentsData, parseDanmakuSegment, parseDanmakuXml } from './provider.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'dsh-plugin-bilibili'
@@ -121,7 +143,7 @@ function configured(value: string | undefined): string | undefined {
 }
 
 /** The model-facing guidance registered with the system prompt. */
-const GUIDANCE = "Use bilibili_search to find videos on bilibili.com by keyword; follow up with bilibili_video for one result's full metadata, bilibili_subtitles for its subtitle transcript, or bilibili_frames for real video frames as images (image-capable models only). Use bilibili_playurl for a direct mp4 download URL. Cite the video URL as a markdown link when you use its content."
+const GUIDANCE = "Use bilibili_search to find videos on bilibili.com by keyword; follow up with bilibili_video for one result's full metadata, bilibili_subtitles for its subtitle transcript, bilibili_danmaku for the full bullet-comment stream, or bilibili_comments for the comment area (both page through the whole dataset; pass the returned cursor/offset to continue). Use bilibili_frames for real video frames as images (image-capable models only; mode=extract runs ffmpeg on the downloaded video for full-resolution frames). Use bilibili_playurl for a direct mp4 download URL. Cite the video URL as a markdown link when you use its content."
 
 /**
  * Register the Bilibili provider and all three tools. The provider reads
@@ -170,4 +192,6 @@ export function apply(ctx: Context, config: Config): void {
   // structured error where no store is mounted, instead of staying invisible
   // everywhere the host-domain mount is the only mount.
   applyBilibiliFramesTool(ctx, provider, resolved.timeoutMs)
+  applyBilibiliDanmakuTool(ctx, provider, resolved.timeoutMs)
+  applyBilibiliCommentsTool(ctx, provider, resolved.timeoutMs)
 }
